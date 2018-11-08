@@ -13,7 +13,7 @@ VOCAB = ["a", "cat", "sat", "on", "the", "mat"]
 
 
 def generate_embeddings(vocab, embed_dim):
-    return np.stack([np.ones(embed_dim) * i for i in range(len(vocab))])
+    return np.stack([np.ones(embed_dim) * i * 1.1 for i in range(len(vocab))])
 
 
 @pytest.fixture(scope='session')
