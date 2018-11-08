@@ -1,10 +1,16 @@
 import tensorflow.contrib.lookup as lookup
 import numpy as np
 
+PAD_TOKEN = '<pad>'
+UNKNOWN_TOKEN = '<unk>'
+START_TOKEN = '<start>'
+STOP_TOKEN = '<stop>'
+
 SPECIAL_TOKENS = [
-    '<unk>',
-    '<start>',
-    '<stop>'
+    PAD_TOKEN,
+    UNKNOWN_TOKEN,
+    START_TOKEN,
+    STOP_TOKEN
 ]
 
 OOV_TOKEN_ID = 0
@@ -47,8 +53,8 @@ def read_word_embeddings(file_path, embed_dim,
             tokens = line.split(' ')
 
             word, embed = tokens[0], np.array([float(t) for t in tokens[1:]])
-
             assert len(embed) == embed_dim
+
             vocab.append(word)
             embeds.append(embed)
 
@@ -59,8 +65,8 @@ def read_word_embeddings(file_path, embed_dim,
     assert embedding_matrix.shape == (vocab_size, embed_dim)
 
     if include_special_tokens:
-        special_tokens_embeddings = get_special_tokens_embeds(embedding_matrix)
-        embedding_matrix = np.concatenate([special_tokens_embeddings, embedding_matrix])
+        special_token_embeds = get_special_tokens_embeds(embedding_matrix)
+        embedding_matrix = np.concatenate([special_token_embeds, embedding_matrix], axis=0)
         assert embedding_matrix.shape == (vocab_size + len(SPECIAL_TOKENS), embed_dim)
 
     return vocab, embedding_matrix

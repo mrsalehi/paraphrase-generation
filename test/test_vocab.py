@@ -9,7 +9,8 @@ from models.common import vocab
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 EMBED_DIM = 10
-VOCAB = ["a", "cat", "sat", "on", "the", "mat"]
+VOCAB = ['a', 'cat', 'sat', 'on', 'the', 'mat', 'practice', 'start', 'trying', 'couple', 'always', 'reliable', 'simple',
+         'to', 'project', 'is', 'learning', 'good', 'it', 'any', 'out', 'of', 'baselines.', 'machine']
 
 
 def generate_embeddings(vocab, embed_dim):
