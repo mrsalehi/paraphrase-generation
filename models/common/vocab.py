@@ -25,11 +25,13 @@ def emulate_distribution(shape, target_samples):
 
 
 def get_special_tokens_embeds(embeddings):
-    shape = (len(SPECIAL_TOKENS), embeddings.shape[1])
+    pad_embedding = np.zeros((1, embeddings.shape[1]), dtype=np.float32)
+
+    shape = (len(SPECIAL_TOKENS) - 1, embeddings.shape[1])
     special_embeddings = emulate_distribution(shape, embeddings)
     special_embeddings = special_embeddings.astype(np.float32)
 
-    return special_embeddings
+    return np.concatenate([pad_embedding, special_embeddings], axis=0)
 
 
 def read_word_embeddings(file_path, embed_dim,
