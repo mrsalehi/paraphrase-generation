@@ -1,3 +1,4 @@
+import tensorflow as tf
 import tensorflow.contrib.lookup as lookup
 import numpy as np
 
@@ -74,12 +75,13 @@ def read_word_embeddings(file_path, embed_dim,
     return vocab, embedding_matrix
 
 
-def get_vocab_lookup(vocab, name='vocab_lookup'):
-    vocab_lookup = lookup.index_table_from_tensor(
-        mapping=vocab,
-        num_oov_buckets=0,
-        default_value=OOV_TOKEN_ID,
-        name=name
-    )
+def get_vocab_lookup(vocab, name=None, reuse=None):
+    with tf.variable_scope(name, 'vocab_lookup', reuse=reuse):
+        vocab_lookup = lookup.index_table_from_tensor(
+            mapping=vocab,
+            num_oov_buckets=0,
+            default_value=OOV_TOKEN_ID,
+            name=name
+        )
 
     return vocab_lookup
