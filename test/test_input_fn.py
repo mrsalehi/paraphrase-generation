@@ -88,6 +88,11 @@ def test_num_epochs(batches):
     assert len(epochs) == NUM_EPOCH
 
 
+def test_batch_size(batches):
+    for b in batches:
+        assert b.shape[0] == BATCH_SIZE
+
+
 def test_num_unique_batches(batches):
     def get_batch_strs(bs):
         return [str(b) for b in bs]
