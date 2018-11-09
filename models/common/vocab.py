@@ -85,3 +85,20 @@ def get_vocab_lookup(vocab, name=None, reuse=None):
         )
 
     return vocab_lookup
+
+
+def init_embeddings(embed_matrix):
+    with tf.variable_scope('embedding_lookup', reuse=False):
+        embeddings = tf.get_variable('embeddings',
+                                     shape=embed_matrix.shape,
+                                     initializer=tf.constant_initializer(embed_matrix),
+                                     trainable=True)
+
+    return embeddings
+
+
+def embed_tokens(ids):
+    with tf.variable_scope('embedding_lookup', reuse=True):
+        embeddings = tf.get_variable('embeddings')
+
+    return tf.nn.embedding_lookup(embeddings, ids)
