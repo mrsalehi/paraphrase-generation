@@ -51,28 +51,34 @@ def dataset_file(tmpdir_factory):
 
 
 @pytest.fixture(scope='session')
-def batches(dataset_file, embedding_file):
+def dataset(dataset_file, embedding_file):
     d_fn, gold_dataset = dataset_file
     e_fn, gold_embeds = embedding_file
 
-    with tf.Graph().as_default():
-        vocab, _ = read_word_embeddings(e_fn, EMBED_DIM)
-        vocab_lookup = get_vocab_lookup(vocab)
+    vocab, _ = read_word_embeddings(e_fn, EMBED_DIM)
+    vocab_lookup = get_vocab_lookup(vocab)
 
-        dataset = neural_editor.input_fn(d_fn, vocab_lookup, BATCH_SIZE, NUM_EPOCH)
-        iter = dataset.make_initializable_iterator()
+    dataset = neural_editor.input_fn(d_fn, vocab_lookup, BATCH_SIZE, NUM_EPOCH)
 
-        with tf.Session() as sess:
-            sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])
-            sess.run(iter.initializer)
+    return dataset, e_fn
 
-            batches = []
-            while True:
-                try:
-                    batch, label = sess.run(iter.get_next())
-                    batches.append(batch)
-                except tf.errors.OutOfRangeError:
-                    break
+
+@pytest.fixture(scope='session')
+def batches(dataset):
+    dataset, _ = dataset
+    iter = dataset.make_initializable_iterator()
+
+    with tf.Session() as sess:
+        sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])
+        sess.run(iter.initializer)
+
+        batches = []
+        while True:
+            try:
+                batch, label = sess.run(iter.get_next())
+                batches.append(batch[0])
+            except tf.errors.OutOfRangeError:
+                break
 
     return batches
 
