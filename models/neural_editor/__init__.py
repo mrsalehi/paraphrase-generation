@@ -78,5 +78,12 @@ def eval_input_fn():
     return input_fn('')
 
 
+def model_fn(features, labels, mode, param):
+    src, tgt, inserted_words, deleted_words = features
+
+
+
+
 def get_estimator():
+    tf.estimator.Estimator
     pass
