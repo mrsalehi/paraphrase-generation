@@ -1,6 +1,5 @@
 import os
 import tensorflow as tf
-import numpy as np
 import models.common.sequence as sequence
 import models.common.vocab as vocab
 import models.neural_editor.encoder as encoder
@@ -37,6 +36,10 @@ def test_encoder(dataset_file, embedding_file):
     with tf.Session() as sess:
         sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])
         sess.run(iter.initializer)
+
         oeo, o_src, o_src_len, o_src_embd = sess.run([encoder_output, src, src_len, src_embd])
+
+        for i in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+            print(i)
 
         assert oeo.shape == (BATCH_SIZE, o_src_len.max(), HIDDEN_DIM)
