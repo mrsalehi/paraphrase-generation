@@ -10,145 +10,6 @@ import models.common.sequence as sequence
 OPS_NAME = 'edit_encoder'
 
 
-def word_aggregator(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
-    """
-    Args:
-        words: tensor in shape of [batch x max_len x embed_dim]
-        lengths: tensor in shape of [batch]
-        hidden_dim: num of lstm hidden units
-        name: op name
-        reuse: reuse variable
-
-    Returns:
-        aggregation_result, a tensor in shape of [batch x max_len x hidden_dim]
-
-    """
-    with tf.variable_scope(name, 'word_aggregator', [words, lengths], reuse=reuse):
-        batch_size = tf.shape(words)[0]
-
-        def create_rnn_layer(layer_num):
-            cell = tf_rnn.LSTMCell(hidden_dim, name='layer_%s' % layer_num)
-            return cell
-
-        cell = tf_rnn.MultiRNNCell([create_rnn_layer(i) for i in range(num_layers)])
-        zero_state = sequence.create_trainable_initial_states(batch_size, cell)
-
-        outputs, last_state = tf.nn.dynamic_rnn(
-            cell,
-            words,
-            sequence_length=lengths,
-            initial_state=zero_state
-        )
-
-        return outputs
-
-
-def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
-    """
-    Args:
-        words: tensor in shape of [batch x max_len x embed_dim]
-        lengths: tensor in shape of [batch]
-        hidden_dim: num of lstm hidden units
-        name: op name
-        reuse: reuse variable
-
-    Returns:
-        aggregation_result, a tensor in shape of [batch x max_len x hidden_dim]
-
-    """
-    with tf.variable_scope(name, 'context_encoder', [words, lengths], reuse=reuse):
-        def create_rnn_layer(layer_num, dim):
-            cell = tf_rnn.LSTMCell(dim, name='layer_%s' % layer_num)
-            cell = tf_rnn.ResidualWrapper(cell)
-            return cell
-
-        batch_size = tf.shape(words)[0]
-
-        fw_cell = tf_rnn.MultiRNNCell([create_rnn_layer(i, hidden_dim // 2) for i in range(num_layers)])
-        bw_cell = tf_rnn.MultiRNNCell([create_rnn_layer(i, hidden_dim // 2) for i in range(num_layers)])
-
-        fw_zero_state = sequence.create_trainable_initial_states(batch_size, fw_cell, 'fw_zs')
-        bw_zero_state = sequence.create_trainable_initial_states(batch_size, bw_cell, 'bw_zs')
-
-        outputs, state = tf.nn.bidirectional_dynamic_rnn(
-            fw_cell,
-            bw_cell,
-            words,
-            lengths,
-            fw_zero_state,
-            bw_zero_state
-        )
-
-        output = tf.concat(outputs, axis=2)
-        assert output.shape[2] == hidden_dim
-
-    return output
-
-
-def rnn_encoder(source_words, target_words, insert_words, delete_words,
-                source_lengths, target_lengths, iw_lengths, dw_lengths,
-                ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
-                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
-    """
-    Args:
-        source_words:
-        target_words:
-        insert_words:
-        delete_words:
-        source_lengths:
-        target_lengths:
-        iw_lengths:
-        dw_lengths:
-        ctx_hidden_dim:
-        ctx_hidden_layer:
-        wa_hidden_dim:
-        wa_hidden_layer:
-        edit_dim:
-        noise_scaler:
-        norm_eps:
-        norm_max:
-        dropout_keep:
-
-    Returns:
-
-    """
-    with tf.variable_scope(OPS_NAME):
-        cnx_encoder = tf.make_template('cnx_encoder', context_encoder,
-                                       hidden_dim=ctx_hidden_dim,
-                                       num_layers=ctx_hidden_layer)
-
-        cnx_src = cnx_encoder(source_words, source_lengths)
-        cnx_tgt = cnx_encoder(target_words, target_lengths)
-
-        cnx_src_last = sequence.last_relevant(cnx_src, source_lengths)
-        cnx_tgt_last = sequence.last_relevant(cnx_tgt, target_lengths)
-
-        cnx_src_last = tf.nn.dropout(cnx_src_last, dropout_keep)
-        cnx_tgt_last = tf.nn.dropout(cnx_tgt_last, dropout_keep)
-
-        wa = tf.make_template('wa', word_aggregator,
-                              hidden_dim=ctx_hidden_dim,
-                              num_layers=ctx_hidden_layer)
-
-        wa_inserted = wa(insert_words, iw_lengths)
-        wa_deleted = wa(delete_words, dw_lengths)
-
-        wa_inserted_last = sequence.last_relevant(wa_inserted, iw_lengths)
-        wa_deleted_last = sequence.last_relevant(wa_deleted, dw_lengths)
-
-        wa_inserted_last = tf.nn.dropout(wa_inserted_last)
-        wa_deleted_last = tf.nn.dropout(wa_deleted_last)
-
-        features = tf.concat([
-            cnx_src_last,
-            cnx_tgt_last,
-            wa_inserted_last,
-            wa_deleted_last
-        ], dim=1)
-
-        edit_vector = tf.layers.dense(features, edit_dim, 'encoder_ev')
-
-
 def sample_vMF(m, kappa, norm_eps, norm_max):
     batch_size = tf.shape(m)[0]
     id_dim = m.shape[1]
@@ -221,3 +82,171 @@ def hardtanh(x, min_val, max_val):
     lower = tf.maximum(x, min_val)
     upper = tf.minimum(lower, max_val)
     return upper
+
+
+def word_aggregator(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
+    """
+    Args:
+        words: tensor in shape of [batch x max_len x embed_dim]
+        lengths: tensor in shape of [batch]
+        hidden_dim: num of lstm hidden units
+        name: op name
+        reuse: reuse variable
+
+    Returns:
+        aggregation_result, a tensor in shape of [batch x max_len x hidden_dim]
+
+    """
+    with tf.variable_scope(name, 'word_aggregator', [words, lengths], reuse=reuse):
+        batch_size = tf.shape(words)[0]
+
+        def create_rnn_layer(layer_num):
+            cell = tf_rnn.LSTMCell(hidden_dim, name='layer_%s' % layer_num)
+            return cell
+
+        cell = tf_rnn.MultiRNNCell([create_rnn_layer(i) for i in range(num_layers)])
+        zero_state = sequence.create_trainable_initial_states(batch_size, cell)
+
+        outputs, last_state = tf.nn.dynamic_rnn(
+            cell,
+            words,
+            sequence_length=lengths,
+            initial_state=zero_state
+        )
+
+        return outputs
+
+
+def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
+    """
+    Args:
+        words: tensor in shape of [batch x max_len x embed_dim]
+        lengths: tensor in shape of [batch]
+        hidden_dim: num of lstm hidden units
+        name: op name
+        reuse: reuse variable
+
+    Returns:
+        aggregation_result, a tensor in shape of [batch x max_len x hidden_dim]
+
+    """
+    with tf.variable_scope(name, 'context_encoder', [words, lengths], reuse=reuse):
+        def create_rnn_layer(layer_num, dim):
+            if layer_num == 0:
+                return tf_rnn.LSTMCell(dim, name='layer_%s' % layer_num)
+
+            cell = tf_rnn.LSTMCell(dim, name='layer_%s' % layer_num)
+            cell = tf_rnn.ResidualWrapper(cell)
+            return cell
+
+        batch_size = tf.shape(words)[0]
+
+        fw_cell = tf_rnn.MultiRNNCell([create_rnn_layer(i, hidden_dim // 2) for i in range(num_layers)])
+        bw_cell = tf_rnn.MultiRNNCell([create_rnn_layer(i, hidden_dim // 2) for i in range(num_layers)])
+
+        fw_zero_state = sequence.create_trainable_initial_states(batch_size, fw_cell, 'fw_zs')
+        bw_zero_state = sequence.create_trainable_initial_states(batch_size, bw_cell, 'bw_zs')
+
+        outputs, state = tf.nn.bidirectional_dynamic_rnn(
+            fw_cell,
+            bw_cell,
+            words,
+            lengths,
+            fw_zero_state,
+            bw_zero_state
+        )
+
+        output = tf.concat(outputs, axis=2)
+        assert output.shape[2] == hidden_dim
+
+    return output
+
+
+def rnn_encoder(source_words, target_words, insert_words, delete_words,
+                source_lengths, target_lengths, iw_lengths, dw_lengths,
+                ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
+                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
+    """
+    Args:
+        source_words:
+        target_words:
+        insert_words:
+        delete_words:
+        source_lengths:
+        target_lengths:
+        iw_lengths:
+        dw_lengths:
+        ctx_hidden_dim:
+        ctx_hidden_layer:
+        wa_hidden_dim:
+        wa_hidden_layer:
+        edit_dim:
+        noise_scaler:
+        norm_eps:
+        norm_max:
+        dropout_keep:
+
+    Returns:
+
+    """
+    with tf.variable_scope(OPS_NAME):
+        cnx_encoder = tf.make_template('cnx_encoder', context_encoder,
+                                       hidden_dim=ctx_hidden_dim,
+                                       num_layers=ctx_hidden_layer)
+
+        cnx_src = cnx_encoder(source_words, source_lengths)
+        cnx_tgt = cnx_encoder(target_words, target_lengths)
+
+        cnx_src_last = sequence.last_relevant(cnx_src, source_lengths)
+        cnx_tgt_last = sequence.last_relevant(cnx_tgt, target_lengths)
+
+        cnx_src_last = tf.nn.dropout(cnx_src_last, dropout_keep)
+        cnx_tgt_last = tf.nn.dropout(cnx_tgt_last, dropout_keep)
+
+        wa = tf.make_template('wa', word_aggregator,
+                              hidden_dim=wa_hidden_dim,
+                              num_layers=wa_hidden_layer)
+
+        wa_inserted = wa(insert_words, iw_lengths)
+        wa_deleted = wa(delete_words, dw_lengths)
+
+        wa_inserted_last = sequence.last_relevant(wa_inserted, iw_lengths)
+        wa_deleted_last = sequence.last_relevant(wa_deleted, dw_lengths)
+
+        wa_inserted_last = tf.nn.dropout(wa_inserted_last, dropout_keep)
+        wa_deleted_last = tf.nn.dropout(wa_deleted_last, dropout_keep)
+
+        features = tf.concat([
+            cnx_src_last,
+            cnx_tgt_last,
+            wa_inserted_last,
+            wa_deleted_last
+        ], axis=1)
+
+        edit_vector = tf.layers.dense(features, edit_dim, name='encoder_ev')
+
+        noised_edit_vector = sample_vMF(edit_vector, noise_scaler, norm_eps, norm_max)
+
+        return noised_edit_vector
+
+
+def accumulator_encoder(insert_words, delete_words,
+                        iw_lengths, dw_lengths,
+                        edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
+    mask = tf.sequence_mask(iw_lengths, dtype=tf.float32)
+    insert_embed = mask * tf.reduce_sum(insert_words, axis=2)
+
+    mask = tf.sequence_mask(dw_lengths, dtype=tf.float32)
+    delete_embed = mask * tf.reduce_sum(delete_words, axis=2)
+
+    linear_prenoise = tf.make_template('linear_prenoise', tf.layers.dense,
+                                       units=edit_dim / 2,
+                                       activation=None,
+                                       use_bias=False)
+    insert_embed = linear_prenoise(insert_embed)
+    delete_embed = linear_prenoise(delete_embed)
+
+    combined = tf.concat([insert_embed, delete_embed], axis=1)
+    combined = sample_vMF(combined, noise_scaler, norm_eps, norm_max)
+
+    return combined

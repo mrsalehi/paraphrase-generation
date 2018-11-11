@@ -9,7 +9,7 @@ from test.test_input_fn import embedding_file, dataset_file, dataset, EMBED_DIM,
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
-HIDDEN_DIM = 20
+HIDDEN_DIM = 256
 NUM_LAYER = 3
 
 

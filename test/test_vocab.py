@@ -8,7 +8,7 @@ from models.common import vocab
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
-EMBED_DIM = 10
+EMBED_DIM = 30
 VOCAB = ['a', 'cat', 'sat', 'on', 'the', 'mat', 'practice', 'start', 'trying', 'couple', 'always', 'reliable', 'simple',
          'to', 'project', 'is', 'learning', 'good', 'it', 'any', 'out', 'of', 'baselines.', 'machine']
 

@@ -11,6 +11,9 @@ def bidirectional_encoder(src, src_length,
                           dropout_keep, use_dropout=False, reuse=None, name=None):
     with tf.variable_scope(name, 'encoder', values=[src, src_length], reuse=reuse):
         def create_rnn_layer(layer_num, dim):
+            if layer_num == 0:
+                return tf_rnn.LSTMCell(dim, name='layer_%s' % layer_num)
+
             cell = tf_rnn.LSTMCell(dim, name='layer_%s' % layer_num)
             cell = tf_rnn.ResidualWrapper(cell)
             return cell
