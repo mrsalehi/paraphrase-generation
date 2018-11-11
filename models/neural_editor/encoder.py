@@ -20,8 +20,8 @@ def bidirectional_encoder(src, src_length,
         fw_cell = tf_rnn.MultiRNNCell([create_rnn_layer(i, hidden_dim // 2) for i in range(num_layer)])
         bw_cell = tf_rnn.MultiRNNCell([create_rnn_layer(i, hidden_dim // 2) for i in range(num_layer)])
 
-        fw_zero_state = sequence.make_init_states_trainable(batch_size, fw_cell, 'fw_zs')
-        bw_zero_state = sequence.make_init_states_trainable(batch_size, bw_cell, 'bw_zs')
+        fw_zero_state = sequence.create_trainable_initial_states(batch_size, fw_cell, 'fw_zs')
+        bw_zero_state = sequence.create_trainable_initial_states(batch_size, bw_cell, 'bw_zs')
 
         outputs, state = tf.nn.bidirectional_dynamic_rnn(
             fw_cell,
