@@ -20,7 +20,17 @@ def length_pre_embedding(sequence, name=None):
     return length
 
 
-def make_init_states_trainable(batch_size, cell, name_prefix='zero_states'):
+def last_relevant(output, length):
+    batch_size = tf.shape(output)[0]
+    max_length = tf.shape(output)[1]
+    out_size = int(output.get_shape()[2])
+    index = tf.range(0, batch_size) * max_length + (length - 1)
+    flat = tf.reshape(output, [-1, out_size])
+    relevant = tf.gather(flat, index)
+    return relevant
+
+
+def create_trainable_initial_states(batch_size, cell, name_prefix='zero_states'):
     if not cell._state_is_tuple:
         initial_state = tf.get_variable(
             name_prefix,
