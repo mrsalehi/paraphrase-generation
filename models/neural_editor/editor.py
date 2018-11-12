@@ -1,10 +1,21 @@
 import tensorflow as tf
+import tensorflow.contrib.seq2seq as seq2seq
 import numpy as np
 
 import models.common.vocab as vocab
 import models.common.sequence as seq
 
-import models.neural_editor.encoder as encoder
+from models.neural_editor import encoder
+from models.neural_editor import edit_encoder
+from models.neural_editor import agenda
+
+seq2seq.GreedyEmbeddingHelper
+seq2seq.TrainingHelper
+seq2seq.dynamic_decode()
+seq2seq.AttentionWrapper
+seq2seq.BasicDecoder
+
+
 
 
 def editor_train(source_words, target_words, insert_words, delete_words, embed_matrix,
@@ -26,7 +37,23 @@ def editor_train(source_words, target_words, insert_words, delete_words, embed_m
     insert_words = vocab.embed_tokens(insert_words)
     delete_words = vocab.embed_tokens(delete_words)
 
-    source_embeds = encoder.source_sent_encoder(source_words, src_len, hidden_dim, encoder_layer, dropout_keep)
+    source_embeds, src_sent_encoding = encoder.source_sent_encoder(
+        source_words,
+        src_len,
+        hidden_dim, encoder_layer, dropout_keep
+    )
+
+    edit_vector = edit_encoder.accumulator_encoder(
+        insert_words,
+        delete_words,
+        insert_words_len,
+        delete_words_len,
+        edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep
+    )
+
+    src_agenda = agenda.linear(src_sent_encoding, edit_vector, agenda_dim)
+
+
 
 
 def editor_test():

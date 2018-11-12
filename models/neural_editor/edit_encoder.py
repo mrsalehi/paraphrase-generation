@@ -250,3 +250,10 @@ def accumulator_encoder(insert_words, delete_words,
     combined = sample_vMF(combined, noise_scaler, norm_eps, norm_max)
 
     return combined
+
+
+def random_noise_encoder(batch_size, edit_dim, norm_max):
+    rand_draw = tf.random_normal(shape=(batch_size, edit_dim))
+    rand_draw = rand_draw / tf.norm(rand_draw, axis=1, keepdims=True)
+    rand_norms = tf.random_normal(shape=(batch_size, 1)) * norm_max
+    return rand_draw * rand_norms

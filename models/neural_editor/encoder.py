@@ -36,9 +36,9 @@ def bidirectional_encoder(src, src_length,
         )
 
         output = tf.concat(outputs, axis=2)
-        assert output.shape[2] == hidden_dim
+        final_state = sequence.last_relevant(output, src_length)
 
-    return output
+    return output, final_state
 
 
 def source_sent_encoder(src, src_length,
