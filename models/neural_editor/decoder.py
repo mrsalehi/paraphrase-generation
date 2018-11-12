@@ -38,6 +38,62 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
     def set_agenda(self, agenda):
         self.agenda = agenda
 
+    def zero_state(self, batch_size, dtype, trainable=False):
+        zero_states = super().zero_state(batch_size, dtype)
+        if not trainable:
+            return super().zero_state(batch_size, dtype)
+
+        h, c = self._cells[0].state_size.cell_state
+        name_prefix = 'zero_state'
+        init_c = tf.get_variable(
+            '%s_c' % (name_prefix),
+            [1, c],
+            initializer=tf.constant_initializer(0.0),
+            trainable=True)
+
+        init_h = tf.get_variable(
+            '%s_h' % (name_prefix),
+            [1, h],
+            initializer=tf.constant_initializer(0.0),
+            trainable=True
+        )
+
+        btm_layer_initial = tf_rnn.LSTMStateTuple(
+            tf.tile(init_c, [batch_size, 1]),
+            tf.tile(init_h, [batch_size, 1])
+        )
+
+        btm_layer_initial = seq2seq.AttentionWrapperState(
+            btm_layer_initial,
+            zero_states[0].attention,
+            zero_states[0].time,
+            zero_states[0].alignments,
+            zero_states[0].alignment_history,
+            zero_states[0].attention_state,
+        )
+        initial_variables = [btm_layer_initial]
+
+        for i, (c, h) in enumerate(self.state_size[1:]):
+            init_c = tf.get_variable(
+                '%s_c_%s' % (name_prefix, i),
+                [1, c],
+                initializer=tf.constant_initializer(0.0),
+                trainable=True)
+
+            init_h = tf.get_variable(
+                '%s_h_%s' % (name_prefix, i),
+                [1, h],
+                initializer=tf.constant_initializer(0.0),
+                trainable=True
+            )
+
+            initial_variables.append(tf_rnn.LSTMStateTuple(
+                tf.tile(init_c, [batch_size, 1]),
+                tf.tile(init_h, [batch_size, 1])
+            ))
+
+        return tuple(initial_variables)
+
     def call(self, inputs, state):
         cur_state_pos = 0
         x = inputs
@@ -67,7 +123,8 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
             x = h
 
         for i, cell in enumerate(self._cells[1:]):
-            with tf.variable_scope("cell_%d" % i):
+            i = i + 1
+            with tf.variable_scope("cell_%d" % (i)):
                 if self._state_is_tuple:
                     if not nest.is_sequence(state):
                         raise ValueError(
@@ -85,9 +142,10 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
                 # add residual connection from cell input to cell output
                 x = x + h
 
+        output = tf.concat([x, attention], axis=1)
         new_states = (tuple(new_states) if self._state_is_tuple else tf.concat(new_states, 1))
 
-        return h, new_states
+        return output, new_states
 
 
 def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word_embeds,
@@ -100,7 +158,8 @@ def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word
     bottom_cell = tf_rnn.LSTMCell(hidden_dim, name='bottom_cell')
     bottom_attn_cell = seq2seq.AttentionWrapper(
         bottom_cell,
-        [src_attn, insert_attn, delete_attn],
+        (src_attn, insert_attn, delete_attn),
+        output_attention=False,
         name='bottom_attn_cell'
     )
 
@@ -116,6 +175,58 @@ def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word
     return decoder_cell
 
 
-def train_decoder():
+class DecoderOutputLayer(tf.layers.Layer):
+    def __init__(self, embedding, **kwargs):
+        super().__init__(**kwargs)
+
+        self.embed_dim = embedding.shape[-1]
+        self.vocab_size = embedding.shape[0]
+
+        self.embedding = embedding
+        self.vocab_projection_pos = tf.layers.Dense(self.embed_dim)
+        self.vocab_projection_neg = tf.layers.Dense(self.embed_dim)
+
+    def compute_output_shape(self, input_shape):
+        input_shape = tf.TensorShape(input_shape)
+        input_shape = input_shape.with_rank_at_least(2)
+        if input_shape[-1].value is None:
+            raise ValueError(
+                'The innermost dimension of input_shape must be defined, but saw: %s'
+                % input_shape)
+        return input_shape[:-1].concatenate(self.vocab_size)
+
+    def call(self, inputs, **kwargs):
+        vocab_query_pos = self.vocab_projection_pos(inputs)
+        vocab_query_neg = self.vocab_projection_neg(inputs)
+
+        vocab_logit_pos = tf.nn.relu(tf.matmul(vocab_query_pos, tf.transpose(self.embedding)))
+        vocab_logit_neg = tf.nn.relu(tf.matmul(vocab_query_neg, tf.transpose(self.embedding)))
+
+        logits = vocab_logit_pos - vocab_logit_neg
+
+        return logits
+
+
+def train_decoder(agenda, embeddings, dec_inputs,
+                  src_sent_embeds, insert_word_embeds, delete_word_embeds,
+                  dec_input_lengths, src_lengths, iw_length, dw_length,
+                  attn_dim, hidden_dim, num_layer):
     with tf.variable_scope(OPS_NAME, 'decoder', []):
-        pass
+        batch_size = tf.shape(src_sent_embeds)[0]
+
+        helper = seq2seq.TrainingHelper(dec_inputs, dec_input_lengths, name='train_helper')
+
+        cell = create_decoder_cell(
+            agenda,
+            src_sent_embeds, insert_word_embeds, delete_word_embeds,
+            src_lengths, iw_length, dw_length,
+            attn_dim, hidden_dim, num_layer
+        )
+
+        output_layer = DecoderOutputLayer(embeddings)
+        zero_states = cell.zero_state(batch_size, tf.float32, trainable=True)
+        decoder = seq2seq.BasicDecoder(cell, helper, zero_states, output_layer)
+
+        outputs, _, _ = seq2seq.dynamic_decode(decoder)
+
+        return outputs
