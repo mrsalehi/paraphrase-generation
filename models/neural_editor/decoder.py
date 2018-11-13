@@ -3,6 +3,8 @@ from tensorflow.contrib.framework import nest
 import tensorflow.contrib.rnn as tf_rnn
 from tensorflow.contrib import seq2seq
 
+from models.common import sequence
+
 OPS_NAME = 'decoder'
 
 
@@ -37,62 +39,6 @@ def prepare_decoder_output(target_words, lengths, stop_token_id, pad_token_id):
 class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
     def set_agenda(self, agenda):
         self.agenda = agenda
-
-    def zero_state(self, batch_size, dtype, trainable=False):
-        zero_states = super().zero_state(batch_size, dtype)
-        if not trainable:
-            return super().zero_state(batch_size, dtype)
-
-        h, c = self._cells[0].state_size.cell_state
-        name_prefix = 'zero_state'
-        init_c = tf.get_variable(
-            '%s_c' % (name_prefix),
-            [1, c],
-            initializer=tf.constant_initializer(0.0),
-            trainable=True)
-
-        init_h = tf.get_variable(
-            '%s_h' % (name_prefix),
-            [1, h],
-            initializer=tf.constant_initializer(0.0),
-            trainable=True
-        )
-
-        btm_layer_initial = tf_rnn.LSTMStateTuple(
-            tf.tile(init_c, [batch_size, 1]),
-            tf.tile(init_h, [batch_size, 1])
-        )
-
-        btm_layer_initial = seq2seq.AttentionWrapperState(
-            btm_layer_initial,
-            zero_states[0].attention,
-            zero_states[0].time,
-            zero_states[0].alignments,
-            zero_states[0].alignment_history,
-            zero_states[0].attention_state,
-        )
-        initial_variables = [btm_layer_initial]
-
-        for i, (c, h) in enumerate(self.state_size[1:]):
-            init_c = tf.get_variable(
-                '%s_c_%s' % (name_prefix, i),
-                [1, c],
-                initializer=tf.constant_initializer(0.0),
-                trainable=True)
-
-            init_h = tf.get_variable(
-                '%s_h_%s' % (name_prefix, i),
-                [1, h],
-                initializer=tf.constant_initializer(0.0),
-                trainable=True
-            )
-
-            initial_variables.append(tf_rnn.LSTMStateTuple(
-                tf.tile(init_c, [batch_size, 1]),
-                tf.tile(init_h, [batch_size, 1])
-            ))
-
-        return tuple(initial_variables)
 
     def call(self, inputs, state):
         cur_state_pos = 0
@@ -160,7 +106,7 @@ def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word
         bottom_cell,
         (src_attn, insert_attn, delete_attn),
         output_attention=False,
-        name='bottom_attn_cell'
+        name='att_bottom_cell'
     )
 
     all_cells = [bottom_attn_cell]
@@ -175,8 +121,31 @@ def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word
     return decoder_cell
 
 
+def create_trainable_zero_state(decoder_cell, batch_size):
+    default_initial_states = decoder_cell.zero_state(batch_size, tf.float32)
+    state_sizes = decoder_cell.state_size
+
+    name_prefix = 'zero_state'
+
+    attn_cell_state_size = state_sizes[0].cell_state
+    attn_trainable_cs = sequence.create_trainable_lstm_initial_state(
+        attn_cell_state_size,
+        batch_size,
+        'zero_state_btm_'
+    )
+    attn_init_state = default_initial_states[0].clone(cell_state=attn_trainable_cs)
+
+    init_states = [attn_init_state] + list(sequence.create_trainable_initial_states_ss(
+        batch_size,
+        state_sizes[1:],
+        name_prefix
+    ))
+
+    return tuple(init_states)
+
+
 class DecoderOutputLayer(tf.layers.Layer):
-    def __init__(self, embedding, **kwargs):
+    def __init__(self, embedding, beam_decoder=False, **kwargs):
         super().__init__(**kwargs)
 
         self.embed_dim = embedding.shape[-1]
@@ -185,6 +154,8 @@ class DecoderOutputLayer(tf.layers.Layer):
         self.embedding = embedding
         self.vocab_projection_pos = tf.layers.Dense(self.embed_dim)
         self.vocab_projection_neg = tf.layers.Dense(self.embed_dim)
+
+        self.beam_decoder = beam_decoder
 
     def compute_output_shape(self, input_shape):
         input_shape = tf.TensorShape(input_shape)
@@ -196,6 +167,12 @@ class DecoderOutputLayer(tf.layers.Layer):
         return input_shape[:-1].concatenate(self.vocab_size)
 
     def call(self, inputs, **kwargs):
+        batch_size = tf.shape(inputs)[0]
+        beam_width = inputs.shape[1]
+
+        if self.beam_decoder:
+            inputs = tf.reshape(inputs, [batch_size * beam_width, inputs.shape[2]])
+
         vocab_query_pos = self.vocab_projection_pos(inputs)
         vocab_query_neg = self.vocab_projection_neg(inputs)
 
@@ -203,6 +180,9 @@ class DecoderOutputLayer(tf.layers.Layer):
         vocab_logit_neg = tf.nn.relu(tf.matmul(vocab_query_neg, tf.transpose(self.embedding)))
 
         logits = vocab_logit_pos - vocab_logit_neg
+
+        if self.beam_decoder:
+            logits = tf.reshape(logits, [batch_size, beam_width, logits.shape[1]])
 
         return logits
 
@@ -224,8 +204,56 @@ def train_decoder(agenda, embeddings, dec_inputs,
         )
 
         output_layer = DecoderOutputLayer(embeddings)
-        zero_states = cell.zero_state(batch_size, tf.float32, trainable=True)
+        zero_states = create_trainable_zero_state(cell, batch_size)
+
         decoder = seq2seq.BasicDecoder(cell, helper, zero_states, output_layer)
+
+        outputs, _, _ = seq2seq.dynamic_decode(decoder)
+
+        return outputs
+
+
+def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
+                 src_sent_embeds, insert_word_embeds, delete_word_embeds,
+                 src_lengths, iw_length, dw_length,
+                 attn_dim, hidden_dim, num_layer, beam_width):
+    with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
+        true_batch_size = tf.shape(src_sent_embeds)[0]
+        batch_size = true_batch_size * beam_width
+
+        tiled_agenda = seq2seq.tile_batch(agenda, beam_width)
+
+        tiled_src_sent = seq2seq.tile_batch(src_sent_embeds, beam_width)
+        tiled_insert_embeds = seq2seq.tile_batch(insert_word_embeds, beam_width)
+        tiled_delete_embeds = seq2seq.tile_batch(delete_word_embeds, beam_width)
+
+        tiled_src_lengths = seq2seq.tile_batch(src_lengths, beam_width)
+        tiled_iw_lengths = seq2seq.tile_batch(iw_length, beam_width)
+        tiled_dw_lengths = seq2seq.tile_batch(dw_length, beam_width)
+
+        start_token_id = tf.cast(start_token_id, tf.int32)
+        stop_token_id = tf.cast(stop_token_id, tf.int32)
+
+        cell = create_decoder_cell(
+            tiled_agenda,
+            tiled_src_sent, tiled_insert_embeds, tiled_delete_embeds,
+            tiled_src_lengths, tiled_iw_lengths, tiled_dw_lengths,
+            attn_dim, hidden_dim, num_layer
+        )
+
+        output_layer = DecoderOutputLayer(embeddings, beam_decoder=True)
+        zero_states = create_trainable_zero_state(cell, batch_size)
+
+        decoder = seq2seq.BeamSearchDecoder(
+            cell,
+            embeddings,
+            tf.fill([batch_size], start_token_id),
+            stop_token_id,
+            zero_states,
+            beam_width=beam_width,
+            output_layer=output_layer,
+            length_penalty_weight=0.0
+        )
 
         outputs, _, _ = seq2seq.dynamic_decode(decoder)
 

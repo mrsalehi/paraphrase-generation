@@ -31,7 +31,7 @@ def test_encoder(dataset_file, embedding_file):
     src_len = sequence.length_pre_embedding(src)
     src_embd = tf.nn.embedding_lookup(embedding, src)
 
-    encoder_output = encoder.bidirectional_encoder(src_embd, src_len, HIDDEN_DIM, NUM_LAYER, 0.9)
+    encoder_output, _ = encoder.bidirectional_encoder(src_embd, src_len, HIDDEN_DIM, NUM_LAYER, 0.9)
 
     with tf.Session() as sess:
         sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])

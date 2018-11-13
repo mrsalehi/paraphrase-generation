@@ -100,7 +100,7 @@ def test_decoder_train(dataset_file, embedding_file):
         dec_out = decoder.train_decoder(
             agn, embedding,
             tf.nn.embedding_lookup(embedding, dec_inputs),
-            src_embd,
+            src_sent_embeds,
             tf.nn.embedding_lookup(embedding, inw),
             tf.nn.embedding_lookup(embedding, dlw),
             dec_inputs_len, src_len, sequence.length_pre_embedding(inw),
@@ -108,6 +108,23 @@ def test_decoder_train(dataset_file, embedding_file):
             5, 20, 3
         )
 
+        eval_dec_out = decoder.eval_decoder(
+            agn, embedding,
+            start_token_id, stop_token_id,
+            src_sent_embeds,
+            tf.nn.embedding_lookup(embedding, inw),
+            tf.nn.embedding_lookup(embedding, dlw),
+            src_len, sequence.length_pre_embedding(inw), sequence.length_pre_embedding(dlw),
+            5, 20, 3,
+            5
+        )
+
         with tf.Session() as sess:
             sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])
             sess.run(iter.initializer)
+
+            o = sess.run(dec_out)
+            # o2 = sess.run(eval_dec_out)
+
+            for i in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+                print(i)
