@@ -67,3 +67,13 @@ def create_trainable_initial_states(batch_size, cell, name_prefix='zero_states')
         )
 
     return tuple(initial_variables)
+
+
+def create_trainable_initial_states_ss(batch_size, state_size, name_prefix='zero_states'):
+    initial_variables = []
+    for i, size in enumerate(state_size):
+        initial_variables.append(
+            create_trainable_lstm_initial_state(size, batch_size, '%s_%s_' % (name_prefix, i))
+        )
+
+    return tuple(initial_variables)
