@@ -30,6 +30,27 @@ def last_relevant(output, length):
     return relevant
 
 
+def get_tiled_variable(batch_size, **kwargs):
+    init_variable = tf.get_variable(**kwargs)
+    return tf.tile(init_variable, [batch_size, 1])
+
+
+def create_trainable_lstm_initial_state(state_size, batch_size, name_prefix):
+    c, h = state_size
+    return tf_rnn.LSTMStateTuple(
+        get_tiled_variable(batch_size,
+                           name='%sc' % name_prefix,
+                           shape=[1, c],
+                           initializer=tf.constant_initializer(0.0),
+                           trainable=True),
+        get_tiled_variable(batch_size,
+                           name='%sh' % name_prefix,
+                           shape=[1, h],
+                           initializer=tf.constant_initializer(0.0),
+                           trainable=True)
+    )
+
+
 def create_trainable_initial_states(batch_size, cell, name_prefix='zero_states'):
     if not cell._state_is_tuple:
         initial_state = tf.get_variable(
@@ -40,23 +61,9 @@ def create_trainable_initial_states(batch_size, cell, name_prefix='zero_states')
         return tf.tile(initial_state, [batch_size, 1])
 
     initial_variables = []
-    for i, (c, h) in enumerate(cell.state_size):
-        init_c = tf.get_variable(
-            '%s_c_%s' % (name_prefix, i),
-            [1, c],
-            initializer=tf.constant_initializer(0.0),
-            trainable=True)
-
-        init_h = tf.get_variable(
-            '%s_h_%s' % (name_prefix, i),
-            [1, h],
-            initializer=tf.constant_initializer(0.0),
-            trainable=True
+    for i, size in enumerate(cell.state_size):
+        initial_variables.append(
+            create_trainable_lstm_initial_state(size, batch_size, '%s_%s_' % (name_prefix, i))
         )
-
-        initial_variables.append(tf_rnn.LSTMStateTuple(
-            tf.tile(init_c, [batch_size, 1]),
-            tf.tile(init_h, [batch_size, 1])
-        ))
 
     return tuple(initial_variables)
