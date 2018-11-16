@@ -2,6 +2,8 @@ import tensorflow as tf
 import tensorflow.contrib.lookup as lookup
 import numpy as np
 
+from models.common import graph_utils
+
 PAD_TOKEN = '<pad>'
 UNKNOWN_TOKEN = '<unk>'
 START_TOKEN = '<start>'
@@ -14,7 +16,11 @@ SPECIAL_TOKENS = [
     STOP_TOKEN
 ]
 
-OOV_TOKEN_ID = 0
+OOV_TOKEN_ID = 1
+
+VOCAB_LOOKUP_COLL_NAME = 'vocab_lookup'
+STR_TO_INT = 'str_to_int'
+INT_TO_STR = 'int_to_str'
 
 
 def emulate_distribution(shape, target_samples):
@@ -85,6 +91,41 @@ def get_vocab_lookup(vocab, name=None, reuse=None):
         )
 
     return vocab_lookup
+
+
+def create_vocab_lookup_tables(vocab):
+    str_to_int = lookup.index_table_from_tensor(
+        mapping=vocab,
+        num_oov_buckets=0,
+        default_value=OOV_TOKEN_ID,
+        name='vocab_lookup_str_to_int'
+    )
+
+    int_to_str = lookup.index_to_string_table_from_tensor(
+        mapping=vocab,
+        default_value=UNKNOWN_TOKEN,
+        name='vocab_lookup_int_to_str'
+    )
+
+    vocab_lookup = {
+        INT_TO_STR: int_to_str,
+        STR_TO_INT: str_to_int
+    }
+
+    graph_utils.add_dict_to_collection(vocab_lookup, VOCAB_LOOKUP_COLL_NAME)
+
+    return vocab_lookup
+
+
+def get_vocab_lookup_tables():
+    vocab_lookup = graph_utils.get_dict_from_collection(VOCAB_LOOKUP_COLL_NAME)
+    return vocab_lookup
+
+
+def get_token_id(token, vocab_table):
+    token = tf.constant(bytes(token, encoding='utf8'), dtype=tf.string)
+    token_id = vocab_table.lookup(token)
+    return token_id
 
 
 def init_embeddings(embed_matrix):
