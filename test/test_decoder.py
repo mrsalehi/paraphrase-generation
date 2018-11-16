@@ -50,13 +50,18 @@ def test_decoder_prepares(dataset_file, embedding_file):
             sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])
             sess.run(iter.initializer)
 
-            dec_inputs, dec_outputs, tgt_len, dil, dol, start_token_id, stop_token_id, dec_outputs_last, tgt = sess.run(
-                [dec_inputs, dec_outputs, tgt_len, dec_inputs_len, dec_outputs_len, start_token_id, stop_token_id,
-                 dec_outputs_last, tgt])
+            while True:
+                try:
+                    dec_inputs, dec_outputs, tgt_len, dil, dol, start_token_id, stop_token_id, dec_outputs_last, tgt = sess.run(
+                        [dec_inputs, dec_outputs, tgt_len, dec_inputs_len, dec_outputs_len, start_token_id,
+                         stop_token_id,
+                         dec_outputs_last, tgt])
 
-            assert list(dil) == list(dol) == list(tgt_len + 1)
-            assert list(dec_inputs[:, 0]) == list(np.ones_like(dec_inputs[:, 0]) * start_token_id)
-            assert list(dec_outputs_last) == list(np.ones_like(dec_outputs_last) * stop_token_id)
+                    assert list(dil) == list(dol) == list(tgt_len + 1)
+                    assert list(dec_inputs[:, 0]) == list(np.ones_like(dec_inputs[:, 0]) * start_token_id)
+                    assert list(dec_outputs_last) == list(np.ones_like(dec_outputs_last) * stop_token_id)
+                except:
+                    break
 
 
 def test_decoder_train(dataset_file, embedding_file):
@@ -80,11 +85,15 @@ def test_decoder_train(dataset_file, embedding_file):
         iter = dataset.make_initializable_iterator()
         (src, tgt, inw, dlw), _ = iter.get_next()
 
-        tgt_len = sequence.length_pre_embedding(tgt)
         src_len = sequence.length_pre_embedding(src)
 
+        tgt_len = sequence.length_pre_embedding(tgt)
+
         dec_inputs = decoder.prepare_decoder_inputs(tgt, start_token_id)
+        dec_outputs = decoder.prepare_decoder_output(tgt, tgt_len, stop_token_id, pad_token_id)
+
         dec_inputs_len = sequence.length_pre_embedding(dec_inputs)
+        dec_outputs_len = sequence.length_pre_embedding(dec_outputs)
 
         batch_size = tf.shape(src)[0]
         edit_vector = edit_encoder.random_noise_encoder(batch_size, EDIT_DIM, 14.0)
@@ -105,25 +114,60 @@ def test_decoder_train(dataset_file, embedding_file):
             tf.nn.embedding_lookup(embedding, dlw),
             dec_inputs_len, src_len, sequence.length_pre_embedding(inw),
             sequence.length_pre_embedding(dlw),
-            5, 20, 3
+            5, 20, 3, False
         )
 
-        eval_dec_out = decoder.eval_decoder(
+        eval_dec_out = decoder.greedy_eval_decoder(
             agn, embedding,
             start_token_id, stop_token_id,
             src_sent_embeds,
             tf.nn.embedding_lookup(embedding, inw),
             tf.nn.embedding_lookup(embedding, dlw),
             src_len, sequence.length_pre_embedding(inw), sequence.length_pre_embedding(dlw),
-            5, 20, 3,
-            5
+            5, 20, 3, 40
         )
+
+        # saver = tf.train.Saver(write_version=tf.train.SaverDef.V1)
+        # s = tf.summary.FileWriter('data/an')
+        # s.add_graph(g)
+        #
+        # all_print = tf.get_collection('print')
+
+        an, final_states, len = dec_out
+        stacked = decoder.attention_score(dec_out)
 
         with tf.Session() as sess:
             sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])
             sess.run(iter.initializer)
 
-            o = sess.run(dec_out)
+            # (src_embd, src_len, tgt, inw, dlw) = sess.run((src_sent_embeds, src_len,tgt, inw, dlw))
+
+            # o = sess.run([an, stacked, len])
+            t = sess.run(tgt)
+            tl = sess.run(tgt_len)
+            do = sess.run(dec_outputs)
+            di = sess.run(dec_inputs)
+            dol = sess.run(dec_outputs_len)
+            dil = sess.run(dec_inputs_len)
+            tgt_len = sess.run(tgt_len)
+
+            assert list(dil) == list(dol) == list(tgt_len + 1)
+            assert list(di[:, 0]) == list(np.ones_like(di[:, 0]) * start_token_id)
+            # print(o[1][0].shape)
+
+            # save_path = saver.save(sess, "data/an/model")
+            # print(save_path)
+            # fucker = tf.get_default_graph().get_tensor_by_name(
+            #     "decoder_1/AttentionAugmentRNNCellZeroState/AttentionWrapperZeroState/zeros_4/Identity:0")
+            # print(sess.run(tf.shape(fucker)))
+            # # print(tf.get_default_graph().get_operation_by_name())
+            # print(fucker)
+            # for i in all_print:
+            #     try:
+            #         print(sess.run(i))
+            #     except Exception as e:
+            #         print(e)
+            #         pass
             # o2 = sess.run(eval_dec_out)
 
             for i in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
