@@ -1,7 +1,7 @@
 import tensorflow as tf
-from tensorflow.contrib.framework import nest
 import tensorflow.contrib.rnn as tf_rnn
 from tensorflow.contrib import seq2seq
+from tensorflow.contrib.framework import nest
 
 from models.common import sequence
 
@@ -96,7 +96,7 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
 
 def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word_embeds,
                         src_lengths, iw_length, dw_length,
-                        attn_dim, hidden_dim, num_layer):
+                        attn_dim, hidden_dim, num_layer, enable_alignment_history=True):
     src_attn = seq2seq.BahdanauAttention(attn_dim, src_sent_embeds, src_lengths, name='src_attn')
     insert_attn = seq2seq.BahdanauAttention(attn_dim, insert_word_embeds, iw_length, name='insert_attn')
     delete_attn = seq2seq.BahdanauAttention(attn_dim, delete_word_embeds, dw_length, name='delete_attn')
@@ -106,6 +106,7 @@ def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word
         bottom_cell,
         (src_attn, insert_attn, delete_attn),
         output_attention=False,
+        alignment_history=enable_alignment_history,
         name='att_bottom_cell'
     )
 
@@ -121,8 +122,11 @@ def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word
     return decoder_cell
 
 
-def create_trainable_zero_state(decoder_cell, batch_size):
-    default_initial_states = decoder_cell.zero_state(batch_size, tf.float32)
+def create_trainable_zero_state(decoder_cell, batch_size, beam_width=None):
+    if beam_width:
+        default_initial_states = decoder_cell.zero_state(batch_size * beam_width, tf.float32)
+    else:
+        default_initial_states = decoder_cell.zero_state(batch_size, tf.float32)
     state_sizes = decoder_cell.state_size
 
     name_prefix = 'zero_state'
@@ -131,14 +135,16 @@ def create_trainable_zero_state(decoder_cell, batch_size):
     attn_trainable_cs = sequence.create_trainable_lstm_initial_state(
         attn_cell_state_size,
         batch_size,
-        'zero_state_btm_'
+        'zero_state_btm_',
+        beam_width
     )
     attn_init_state = default_initial_states[0].clone(cell_state=attn_trainable_cs)
 
     init_states = [attn_init_state] + list(sequence.create_trainable_initial_states_ss(
         batch_size,
         state_sizes[1:],
-        name_prefix
+        name_prefix,
+        beam_width
     ))
 
     return tuple(init_states)
@@ -187,13 +193,14 @@ class DecoderOutputLayer(tf.layers.Layer):
         return logits
 
 
-def train_decoder(agenda, embeddings, dec_inputs,
-                  src_sent_embeds, insert_word_embeds, delete_word_embeds,
+def train_decoder(agenda, embeddings,
+                  dec_inputs, src_sent_embeds, insert_word_embeds, delete_word_embeds,
                   dec_input_lengths, src_lengths, iw_length, dw_length,
-                  attn_dim, hidden_dim, num_layer):
+                  attn_dim, hidden_dim, num_layer, swap_memory):
     with tf.variable_scope(OPS_NAME, 'decoder', []):
         batch_size = tf.shape(src_sent_embeds)[0]
 
+        dec_inputs = tf.nn.embedding_lookup(embeddings, dec_inputs)
         helper = seq2seq.TrainingHelper(dec_inputs, dec_input_lengths, name='train_helper')
 
         cell = create_decoder_cell(
@@ -208,9 +215,9 @@ def train_decoder(agenda, embeddings, dec_inputs,
 
         decoder = seq2seq.BasicDecoder(cell, helper, zero_states, output_layer)
 
-        outputs, _, _ = seq2seq.dynamic_decode(decoder)
+        outputs, state, length = seq2seq.dynamic_decode(decoder, swap_memory=swap_memory)
 
-        return outputs
+        return outputs, state, length
 
 
 def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
@@ -242,7 +249,7 @@ def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
         )
 
         output_layer = DecoderOutputLayer(embeddings, beam_decoder=True)
-        zero_states = create_trainable_zero_state(cell, batch_size)
+        zero_states = create_trainable_zero_state(cell, true_batch_size, beam_width)
 
         decoder = seq2seq.BeamSearchDecoder(
             cell,
@@ -255,6 +262,75 @@ def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
             length_penalty_weight=0.0
         )
 
-        outputs, _, _ = seq2seq.dynamic_decode(decoder)
+        outputs, _, _ = seq2seq.dynamic_decode(decoder, maximum_iterations=40)
 
         return outputs
+
+
+def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
+                        src_sent_embeds, insert_word_embeds, delete_word_embeds,
+                        src_lengths, iw_length, dw_length,
+                        attn_dim, hidden_dim, num_layer, max_sentence_length):
+    with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
+        batch_size = tf.shape(src_sent_embeds)[0]
+
+        start_token_id = tf.cast(start_token_id, tf.int32)
+        stop_token_id = tf.cast(stop_token_id, tf.int32)
+
+        helper = seq2seq.GreedyEmbeddingHelper(embeddings,
+                                               tf.fill([batch_size], start_token_id),
+                                               stop_token_id)
+
+        cell = create_decoder_cell(
+            agenda,
+            src_sent_embeds, insert_word_embeds, delete_word_embeds,
+            src_lengths, iw_length, dw_length,
+            attn_dim, hidden_dim, num_layer
+        )
+
+        output_layer = DecoderOutputLayer(embeddings)
+        zero_states = create_trainable_zero_state(cell, batch_size)
+
+        decoder = seq2seq.BasicDecoder(
+            cell,
+            helper,
+            zero_states,
+            output_layer
+        )
+
+        outputs, state, lengths = seq2seq.dynamic_decode(decoder, maximum_iterations=max_sentence_length)
+
+        return outputs, state, lengths
+
+
+def str_tokens(decoder_output, vocab_i2s):
+    return vocab_i2s.lookup(
+        tf.to_int64(sample_id(decoder_output))
+    )
+
+
+def attention_score(decoder_output):
+    final_attention_state = decoder_output[1][0]
+    alignments = final_attention_state.alignment_history
+
+    def convert(t):
+        return tf.transpose(t.stack(), [1, 0, 2])
+
+    if isinstance(alignments, tuple):
+        return tuple([convert(t) for t in alignments])
+
+    return convert(alignments)
+
+
+def rnn_output(decoder_output):
+    output = decoder_output[0].rnn_output
+    return output
+
+
+def sample_id(decoder_output):
+    output = decoder_output[0].sample_id
+    return output
+
+
+def seq_length(decoder_output):
+    return decoder_output[2]
