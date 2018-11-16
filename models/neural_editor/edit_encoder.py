@@ -1,7 +1,7 @@
+import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.rnn as tf_rnn
 import tensorflow_probability as tfp
-import numpy as np
 
 tfd = tfp.distributions
 
@@ -233,11 +233,15 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
 def accumulator_encoder(insert_words, delete_words,
                         iw_lengths, dw_lengths,
                         edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
-    mask = tf.sequence_mask(iw_lengths, dtype=tf.float32)
-    insert_embed = mask * tf.reduce_sum(insert_words, axis=2)
+    max_len = tf.shape(insert_words)[1]
+    mask = tf.sequence_mask(iw_lengths, maxlen=max_len, dtype=tf.float32)
+    mask = tf.expand_dims(mask, 2)
+    insert_embed = tf.reduce_sum(mask * insert_words, axis=1)
 
-    mask = tf.sequence_mask(dw_lengths, dtype=tf.float32)
-    delete_embed = mask * tf.reduce_sum(delete_words, axis=2)
+    max_len = tf.shape(delete_words)[1]
+    mask = tf.sequence_mask(dw_lengths, maxlen=max_len, dtype=tf.float32)
+    mask = tf.expand_dims(mask, 2)
+    delete_embed = tf.reduce_sum(mask * delete_words, axis=1)
 
     linear_prenoise = tf.make_template('linear_prenoise', tf.layers.dense,
                                        units=edit_dim / 2,
