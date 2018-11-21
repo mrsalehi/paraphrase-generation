@@ -13,6 +13,7 @@ from models.neural_editor import editor, optimizer, decoder
 
 DATASET_CACHE = {}
 
+
 def convert_to_bytes(lst):
     return [bytes(w, encoding='utf8') for w in lst]
 
@@ -46,7 +47,7 @@ def read_examples_from_file(file_path, num_samples=None, seed=0):
         print('Reading examples from cache...')
         examples = DATASET_CACHE[file_path]
     else:
-        print(f'Reading examples from {file_path}...')
+        print('Reading examples from %s...' % file_path)
         with open(file_path, encoding='utf8') as f:
             lines = map(lambda x: x[:-1], f)
             examples = map(parse_instance, lines)
