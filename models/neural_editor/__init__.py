@@ -43,6 +43,7 @@ def read_examples_from_file(file_path, num_samples=None, seed=0):
         file_path = str(file_path)
 
     if file_path in DATASET_CACHE:
+        print('Reading examples from cache...')
         examples = DATASET_CACHE[file_path]
     else:
         print(f'Reading examples from {file_path}...')
