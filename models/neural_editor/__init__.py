@@ -53,6 +53,8 @@ def read_examples_from_file(file_path, num_samples=None, seed=0):
             examples = map(parse_instance, lines)
             examples = list(tqdm(examples, total=util.get_num_total_lines(file_path)))
 
+        DATASET_CACHE[file_path] = examples
+
     if num_samples and len(examples) > num_samples:
         random.seed(seed)
         examples = random.sample(examples, num_samples)
