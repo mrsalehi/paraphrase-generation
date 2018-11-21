@@ -1,6 +1,6 @@
+import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.lookup as lookup
-import numpy as np
 
 from models.common import graph_utils
 
@@ -52,6 +52,9 @@ def read_word_embeddings(file_path, embed_dim,
     vocab = []
     if include_special_tokens:
         vocab += special_tokens
+
+    if not isinstance(file_path, str):
+        file_path = str(file_path)
 
     with open(file_path, encoding='utf8') as f:
         for i, line in enumerate(f):

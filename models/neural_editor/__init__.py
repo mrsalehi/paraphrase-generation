@@ -38,6 +38,9 @@ def parse_instance(instance_str):
 
 
 def read_examples_from_file(file_path, num_samples=None, seed=0):
+    if not isinstance(file_path, str):
+        file_path = str(file_path)
+
     with open(file_path, encoding='utf8') as f:
         lines = map(lambda x: x[:-1], f)
         examples = map(parse_instance, lines)
