@@ -11,6 +11,7 @@ from models.common.sequence import length_pre_embedding
 from models.common.vocab import PAD_TOKEN
 from models.neural_editor import editor, optimizer, decoder
 
+DATASET_CACHE = {}
 
 def convert_to_bytes(lst):
     return [bytes(w, encoding='utf8') for w in lst]
@@ -41,16 +42,20 @@ def read_examples_from_file(file_path, num_samples=None, seed=0):
     if not isinstance(file_path, str):
         file_path = str(file_path)
 
-    with open(file_path, encoding='utf8') as f:
-        lines = map(lambda x: x[:-1], f)
-        examples = map(parse_instance, lines)
-        examples = list(tqdm(examples))
+    if file_path in DATASET_CACHE:
+        examples = DATASET_CACHE[file_path]
+    else:
+        print(f'Reading examples from {file_path}...')
+        with open(file_path, encoding='utf8') as f:
+            lines = map(lambda x: x[:-1], f)
+            examples = map(parse_instance, lines)
+            examples = list(tqdm(examples, total=util.get_num_total_lines(file_path)))
 
-        if num_samples and len(examples) > num_samples:
-            random.seed(seed)
-            examples = random.sample(examples, num_samples)
+    if num_samples and len(examples) > num_samples:
+        random.seed(seed)
+        examples = random.sample(examples, num_samples)
 
-        return examples
+    return examples
 
 
 def get_generator(dataset, index):
