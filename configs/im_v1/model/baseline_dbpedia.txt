@@ -3,7 +3,7 @@ include "../eval/short.txt"
 
 seed = 0
 
-model_dir = edit_runs
+model_dir = im_v1_dbpedia
 
 editor {
     vocab_size = 10000  # a proper size would be >20000
