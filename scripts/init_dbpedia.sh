@@ -24,3 +24,5 @@ cd ..
 wget $DATASET_URL -O ned_more_sim.tar.bz2
 mkdir dbpedia_split
 tar xvfj ned_more_sim.tar.bz2 -C dbpedia_split
+mv dbpedia_split/ned_unique/* dbpedia_split/
+cp dbpedia_split/test.tsv dbpedia_split/valid.tsv
