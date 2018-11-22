@@ -25,7 +25,7 @@ editor {
     norm_max = 14.0
     kill_edit = False
     draw_edit = False
-    use_swap_memory = False
+    use_swap_memory = True
     embed_sentence = False
     wvec_path = glove.6B.300d_dbpedia.txt
 
