@@ -3,7 +3,7 @@ include "../eval/short.txt"
 
 seed = 0
 
-model_dir = edit_runs
+model_dir = neural_editor_dbpedia
 
 editor {
     vocab_size = 10000  # a proper size would be >20000
@@ -25,9 +25,9 @@ editor {
     norm_max = 14.0
     kill_edit = False
     draw_edit = False
-    use_swap_memory = False
+    use_swap_memory = True
     embed_sentence = False
-    wvec_path = glove.6B.300d_yelp.txt
+    wvec_path = glove.6B.300d_dbpedia.txt
 
     edit_enc {
         ctx_hidden_dim = 256
@@ -39,7 +39,7 @@ editor {
 
 dataset {
     # this path should be relative to $SQUAD_ENTAILMENT_DATA
-    path = yelp_dataset_large_split
+    path = dbpedia_split
     use_diff = True
 }
 
