@@ -101,7 +101,11 @@ def word_aggregator(words, lengths, hidden_dim, num_layers, name=None, reuse=Non
         batch_size = tf.shape(words)[0]
 
         def create_rnn_layer(layer_num):
+            if layer_num == 0:
+                return tf_rnn.LSTMCell(hidden_dim, name='layer_%s' % layer_num)
+
             cell = tf_rnn.LSTMCell(hidden_dim, name='layer_%s' % layer_num)
+            cell = tf_rnn.ResidualWrapper(cell)
             return cell
 
         cell = tf_rnn.MultiRNNCell([create_rnn_layer(i) for i in range(num_layers)])

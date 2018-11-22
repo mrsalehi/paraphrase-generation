@@ -227,9 +227,10 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     gold_dec_out, gold_dec_out_len = editor.editor_train(
         src_words, tgt_words, inserted_words, deleted_words, embedding_matrix, vocab_s2i,
         config.editor.hidden_dim, config.editor.agenda_dim, config.editor.edit_dim,
-        config.editor.encoder_layers, config.editor.decoder_layers,
-        config.editor.attention_dim, config.editor.max_sent_length,
-        config.editor.dropout_keep, config.editor.lamb_reg,
+        config.editor.encoder_layers, config.editor.decoder_layers, config.editor.attention_dim,
+        config.editor.edit_enc.ctx_hidden_dim, config.editor.edit_enc.ctx_hidden_layer,
+        config.editor.edit_enc.wa_hidden_dim, config.editor.edit_enc.wa_hidden_layer,
+        config.editor.max_sent_length, config.editor.dropout_keep, config.editor.lamb_reg,
         config.editor.norm_eps, config.editor.norm_max, config.editor.kill_edit,
         config.editor.draw_edit, config.editor.use_swap_memory
     )
@@ -302,18 +303,7 @@ def get_estimator(config, embed_matrix):
 
     return estimator
 
-
-def put_epoch_num(config, data_dir):
-    p = data_dir / config.dataset.path / 'train.tsv'
-    total_num_examples = util.get_num_total_lines(p)
-    num_batch_per_epoch = total_num_examples // config.optim.batch_size
-    num_epoch = config.optim.max_iters // num_batch_per_epoch + 1
-    config.put('optim.num_epoch', num_epoch)
-
-
 def train(config, data_dir):
-    put_epoch_num(config, data_dir)
-
     V, embed_matrix = vocab.read_word_embeddings(
         data_dir / 'word_vectors' / config.editor.wvec_path,
         config.editor.word_dim,

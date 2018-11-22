@@ -41,6 +41,7 @@ def prepare_decoder_input_output(tgt_words, tgt_len, vocab_table):
 def editor_train(source_words, target_words, insert_words, delete_words,
                  embed_matrix, vocab_table,
                  hidden_dim, agenda_dim, edit_dim, num_encoder_layers, num_decoder_layers, attn_dim,
+                 ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
                  max_sent_length, dropout_keep, lamb_reg, norm_eps, norm_max, kill_edit, draw_edit, swap_memory):
     batch_size = tf.shape(source_words)[0]
 
@@ -55,6 +56,7 @@ def editor_train(source_words, target_words, insert_words, delete_words,
 
     # [batch x max_len x embed_dim]
     src_word_embeds = vocab.embed_tokens(source_words)
+    tgt_word_embeds = vocab.embed_tokens(target_words)
     insert_word_embeds = vocab.embed_tokens(insert_words)
     delete_word_embeds = vocab.embed_tokens(delete_words)
 
@@ -72,11 +74,12 @@ def editor_train(source_words, target_words, insert_words, delete_words,
         if draw_edit:
             edit_vector = edit_encoder.random_noise_encoder(batch_size, edit_dim, norm_max)
         else:
-            edit_vector = edit_encoder.accumulator_encoder(
-                insert_word_embeds,
-                delete_word_embeds,
-                iw_len,
-                dw_len,
+            edit_vector = edit_encoder.rnn_encoder(
+                src_word_embeds, tgt_word_embeds,
+                insert_word_embeds, delete_word_embeds,
+                src_len, tgt_len,
+                iw_len, dw_len,
+                ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
                 edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep
             )
 
