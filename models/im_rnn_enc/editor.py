@@ -80,7 +80,8 @@ def editor_train(source_words, target_words, insert_words, delete_words,
                 src_len, tgt_len,
                 iw_len, dw_len,
                 ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
-                edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep
+                edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep,
+                swap_memory
             )
 
     # [batch x agenda_dim]

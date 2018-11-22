@@ -84,7 +84,7 @@ def hardtanh(x, min_val, max_val):
     return upper
 
 
-def word_aggregator(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
+def word_aggregator(words, lengths, hidden_dim, num_layers, swap_memory=False, name=None, reuse=None):
     """
     Args:
         words: tensor in shape of [batch x max_len x embed_dim]
@@ -115,13 +115,14 @@ def word_aggregator(words, lengths, hidden_dim, num_layers, name=None, reuse=Non
             cell,
             words,
             sequence_length=lengths,
-            initial_state=zero_state
+            initial_state=zero_state,
+            swap_memory=False
         )
 
         return outputs
 
 
-def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
+def context_encoder(words, lengths, hidden_dim, num_layers, swap_memory=False, name=None, reuse=None):
     """
     Args:
         words: tensor in shape of [batch x max_len x embed_dim]
@@ -157,7 +158,8 @@ def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=Non
             words,
             lengths,
             fw_zero_state,
-            bw_zero_state
+            bw_zero_state,
+            swap_memory=swap_memory
         )
 
         output = tf.concat(outputs, axis=2)
@@ -169,7 +171,7 @@ def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=Non
 def rnn_encoder(source_words, target_words, insert_words, delete_words,
                 source_lengths, target_lengths, iw_lengths, dw_lengths,
                 ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
-                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
+                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep, swap_memory=False):
     """
     Args:
         source_words:
@@ -196,7 +198,8 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
     with tf.variable_scope(OPS_NAME):
         cnx_encoder = tf.make_template('cnx_encoder', context_encoder,
                                        hidden_dim=ctx_hidden_dim,
-                                       num_layers=ctx_hidden_layer)
+                                       num_layers=ctx_hidden_layer,
+                                       swap_memory=swap_memory)
 
         cnx_src = cnx_encoder(source_words, source_lengths)
         cnx_tgt = cnx_encoder(target_words, target_lengths)
@@ -209,7 +212,8 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
 
         wa = tf.make_template('wa', word_aggregator,
                               hidden_dim=wa_hidden_dim,
-                              num_layers=wa_hidden_layer)
+                              num_layers=wa_hidden_layer,
+                              swap_memory=swap_memory)
 
         wa_inserted = wa(insert_words, iw_lengths)
         wa_deleted = wa(delete_words, dw_lengths)
