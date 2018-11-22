@@ -1,0 +1,45 @@
+include "../optim/default.txt"
+include "../eval/short.txt"
+
+seed = 0
+
+model_dir = edit_runs
+
+editor {
+    vocab_size = 10000  # a proper size would be >20000
+    word_dim = 300
+    hidden_dim = 256  # hidden state dim of encoder and decoder
+    agenda_dim = 256  # agenda vector dim
+    edit_dim = 128 # edit vector dimension
+    attention_dim = 128
+    max_sent_length = 40
+    encoder_layers = 3
+    decoder_layers = 3
+    no_insert_delete_attn = False
+    dropout_keep = 0.8
+    ident_pr = 0.1
+    attend_pr = 0.0
+    enable_vae = True
+    lamb_reg = 100.0
+    norm_eps = 0.1
+    norm_max = 14.0
+    kill_edit = False
+    draw_edit = False
+    use_swap_memory = False
+    embed_sentence = False
+    wvec_path = glove.6B.300d_dbpedia.txt
+
+    edit_enc {
+        ctx_hidden_dim = 256
+        ctx_hidden_layer = 3
+        wa_hidden_dim = 128
+        wa_hidden_layer = 1
+    }
+}
+
+dataset {
+    # this path should be relative to $SQUAD_ENTAILMENT_DATA
+    path = dbpedia_split
+    use_diff = True
+}
+
