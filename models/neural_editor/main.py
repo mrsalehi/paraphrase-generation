@@ -15,6 +15,8 @@ def main():
 
     config = Config.from_file(config_path)
     config.put('model_dir', str(data_dir / config.model_dir))
+    print(config)
+
     if mode == 'train':
         neural_editor.train(config, data_dir)
 
