@@ -74,12 +74,11 @@ def editor_train(source_words, target_words, insert_words, delete_words,
         if draw_edit:
             edit_vector = edit_encoder.random_noise_encoder(batch_size, edit_dim, norm_max)
         else:
-            edit_vector = edit_encoder.rnn_encoder(
-                src_word_embeds, tgt_word_embeds,
-                insert_word_embeds, delete_word_embeds,
-                src_len, tgt_len,
-                iw_len, dw_len,
-                ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
+            edit_vector = edit_encoder.accumulator_encoder(
+                insert_word_embeds,
+                delete_word_embeds,
+                iw_len,
+                dw_len,
                 edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep
             )
 
