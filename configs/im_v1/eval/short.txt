@@ -6,5 +6,5 @@ eval {
     save_steps = 500
     alive_steps = 30
     save_summary_steps = 50
-    keep_checkpoint_max = 20
+    keep_checkpoint_max = 100
 }
