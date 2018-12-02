@@ -16,7 +16,7 @@ cd $DATA_DIR
 # Download expanded set of word vectors
 mkdir word_vectors
 cd word_vectors
-wget -O glove.6B.300d_dbpedia.tar.bz2 $WORD_VECTOR_URL -O
+wget -O glove.6B.300d_dbpedia.tar.bz2 $WORD_VECTOR_URL
 tar xvfj glove.6B.300d_dbpedia.tar.bz2
 cd ..
 
