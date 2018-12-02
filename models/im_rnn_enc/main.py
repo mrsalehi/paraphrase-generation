@@ -27,6 +27,7 @@ def main():
 
     put_epoch_num(config, data_dir)
 
+    print(config_path)
     print(config)
 
     if mode == 'train':

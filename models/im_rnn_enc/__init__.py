@@ -1,6 +1,7 @@
 import random
 
 import tensorflow as tf
+import tensorflow.contrib.metrics as tf_metrics
 from tensorflow.contrib.estimator import InMemoryEvaluatorHook
 from tqdm import tqdm
 
@@ -218,14 +219,18 @@ def add_extra_summary(vocab_i2s, decoder_output, src_words, tgt_words, inserted_
 
 
 def model_fn(features, mode, config, embedding_matrix, vocab_tables):
-    src_words, tgt_words, inserted_words, deleted_words = features
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        base_words, src_words, tgt_words, inserted_words, deleted_words = features
+    else:
+        src_words, tgt_words, inserted_words, deleted_words = features
+        base_words = src_words
 
     vocab_s2i = vocab_tables[vocab.STR_TO_INT]
     vocab_i2s = vocab_tables[vocab.INT_TO_STR]
 
     train_decoder_output, infer_decoder_output, \
     gold_dec_out, gold_dec_out_len = editor.editor_train(
-        src_words, tgt_words, inserted_words, deleted_words, embedding_matrix, vocab_s2i,
+        base_words, src_words, tgt_words, inserted_words, deleted_words, embedding_matrix, vocab_s2i,
         config.editor.hidden_dim, config.editor.agenda_dim, config.editor.edit_dim,
         config.editor.encoder_layers, config.editor.decoder_layers, config.editor.attention_dim,
         config.editor.edit_enc.ctx_hidden_dim, config.editor.edit_enc.ctx_hidden_layer,
@@ -262,7 +267,8 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         return tf.estimator.EstimatorSpec(
             mode,
             loss=loss,
-            evaluation_hooks=[extra_summary_logger]
+            evaluation_hooks=[extra_summary_logger],
+            eval_metric_ops={'bleu': tf_metrics.streaming_mean(avg_bleu)}
         )
 
     elif mode == tf.estimator.ModeKeys.PREDICT:
@@ -303,6 +309,7 @@ def get_estimator(config, embed_matrix):
 
     return estimator
 
+
 def train(config, data_dir):
     V, embed_matrix = vocab.read_word_embeddings(
         data_dir / 'word_vectors' / config.editor.wvec_path,
@@ -320,16 +327,33 @@ def train(config, data_dir):
                           name='eval',
                           every_n_steps=config.eval.eval_steps),
 
-            # get_eval_hook(estimator,
-            #               lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
-            #                                     num_examples=config.eval.big_num_examples),
-            #               name='eval_big',
-            #               every_n_steps=config.eval.big_eval_steps),
-            #
-            # get_eval_hook(estimator,
-            #               lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
-            #                                     file_name='train.tsv', num_examples=config.eval.big_num_examples),
-            #               name='train_big',
-            #               every_n_steps=config.eval.big_eval_steps),
+            get_eval_hook(estimator,
+                          lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
+                                                num_examples=config.eval.big_num_examples),
+                          name='eval_big',
+                          every_n_steps=config.eval.big_eval_steps),
+
+            get_eval_hook(estimator,
+                          lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
+                                                file_name='train.tsv', num_examples=config.eval.big_num_examples),
+                          name='train_big',
+                          every_n_steps=config.eval.big_eval_steps),
         ]
     )
+
+
+def eval(config, data_dir, checkpoint_path=None):
+    V, embed_matrix = vocab.read_word_embeddings(
+        data_dir / 'word_vectors' / config.editor.wvec_path,
+        config.editor.word_dim,
+        config.editor.vocab_size
+    )
+
+    estimator = get_estimator(config, embed_matrix)
+
+    output = estimator.evaluate(
+        input_fn=lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V), num_examples=1e10),
+        checkpoint_path=checkpoint_path
+    )
+
+    return output
