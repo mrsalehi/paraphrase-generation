@@ -1,3 +1,4 @@
+import pickle
 import random
 
 import tensorflow as tf
@@ -357,3 +358,170 @@ def eval(config, data_dir, checkpoint_path=None):
     )
 
     return output
+
+def input_fn_cmd(vocab_table):
+    def get_single_cmd_input():
+        base = input("Enter Base:\n")
+        src = input("Enter Source:\n")
+        tgt = input("Enter Target:\n")
+        insert_words = input("Enter Insert words:\n")
+        delete_words = input("Enter Delete words:\n")
+
+        base_words = [w.lower() for w in base.split(' ')]
+        base_words = [convert_to_bytes(base_words)]
+
+        if insert_words == '@' and delete_words == '@':
+            edit_instance = parse_instance('%s\t\%s' % (src, tgt))
+            edit_instance = tuple([tuple(i) for i in edit_instance])
+        else:
+            src_words = [w.lower() for w in src.split(' ')]
+            tgt_words = [w.lower() for w in tgt.split(' ')]
+            insert_words = [w.lower() for w in insert_words.split(' ')]
+            delete_words = [w.lower() for w in delete_words.split(' ')]
+            if len(insert_words) == 0:
+                insert_words.append(vocab.UNKNOWN_TOKEN)
+            if len(delete_words) == 0:
+                delete_words.append(vocab.UNKNOWN_TOKEN)
+
+            edit_instance = tuple(convert_to_bytes(src_words)), \
+                            tuple(convert_to_bytes(tgt_words)), \
+                            tuple(convert_to_bytes(insert_words)), \
+                            tuple(convert_to_bytes(delete_words))
+
+        return tuple(base_words) + edit_instance
+
+    def dataset_generator():
+        while True:
+            print("\n\n\n")
+            yield get_single_cmd_input()
+
+    if isinstance(vocab_table, dict):
+        vocab_table = vocab_table[vocab.STR_TO_INT]
+
+    dataset = tf.data.Dataset.from_generator(
+        generator=dataset_generator,
+        output_types=(tf.string, tf.string, tf.string, tf.string, tf.string),
+        output_shapes=((None,), (None,), (None,), (None,), (None,))
+    )
+    dataset = dataset.map(lambda *x: [vocab_table.lookup(i) for i in x])
+    dataset = dataset.batch(1)
+
+    fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
+
+    dataset = dataset.zip((dataset, fake_label))
+
+    return dataset
+
+
+def input_fn_from_gen(gen, vocab_table):
+    if isinstance(vocab_table, dict):
+        vocab_table = vocab_table[vocab.STR_TO_INT]
+
+    dataset = tf.data.Dataset.from_generator(
+        generator=gen,
+        output_types=(tf.string, tf.string, tf.string, tf.string, tf.string),
+        output_shapes=((None,), (None,), (None,), (None,), (None,))
+    )
+    dataset = dataset.map(lambda *x: [vocab_table.lookup(i) for i in x])
+    dataset = dataset.batch(1)
+
+    fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
+
+    dataset = dataset.zip((dataset, fake_label))
+
+    return dataset
+
+NUM_CANDIDATES = 5
+NUM_SAMPLING = 5
+
+
+def generate_candidate(train_examples, base):
+    candidates = []
+    for _ in range(NUM_CANDIDATES):
+        possibles = random.sample(train_examples, NUM_SAMPLING)
+        candidates.append(
+            max(possibles, key=lambda x: x[1])
+        )
+
+    return candidates
+
+
+def augment_dataset(train_examples, estimator, checkpoint_path, ds, V):
+    dtrain, dtest, classes = ds
+
+    augment_formulas = []
+    for i, cls in dtrain:
+        candidates = generate_candidate(train_examples, i)
+        augment_formulas += [(i, c[0], cls) for c in candidates]
+
+    def augment_generator():
+        for base, edit, c in augment_formulas:
+            base_words = [w.lower() for w in base.split(' ')]
+            base_words = tuple([convert_to_bytes(base_words)])
+            edit_instance = parse_instance(edit)
+
+            yield base_words + edit_instance
+
+    output = estimator.predict(
+        input_fn=lambda: input_fn_from_gen(augment_generator, vocab.create_vocab_lookup_tables(V)),
+        checkpoint_path=checkpoint_path
+    )
+
+    additional_examples = []
+    for i, p in enumerate(output):
+        af = augment_formulas[i]
+        print("cls:\t", af[2])
+        print("base:\t", af[0])
+        edit = af[1]
+        src, tgt, iw, dw = parse_instance(edit)
+        print("src:\t", src)
+        print("iw:\t", iw)
+        print("dw:\t", dw)
+        print("tgt:\t", tgt)
+        print('augmented:\t', p['joined'][0])
+        additional_examples.append(
+            (p['joined'][0].decode('utf8'), af[2])
+        )
+        print("===============================================\n\n")
+
+    dtrain += additional_examples
+
+    for _ in range(3):
+        random.shuffle(dtrain)
+
+    return dtrain
+
+def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
+    V, embed_matrix = vocab.read_word_embeddings(
+        data_dir / 'word_vectors' / config.editor.wvec_path,
+        config.editor.word_dim,
+        config.editor.vocab_size
+    )
+
+    config.put('optim.batch_size', 1)
+
+    estimator = get_estimator(config, embed_matrix)
+
+    with open(data_dir / config.dataset.path / 'train.tsv', encoding='utf8') as f:
+        train_examples = []
+        for l in tqdm(f, total=util.get_num_total_lines(data_dir / config.dataset.path / 'train.tsv')):
+            l = l[:-1]
+            src, tgt = l.split('\t')
+
+            train_examples.append((l, util.jaccard(
+                set([w.lower() for w in src.split(' ')]),
+                set([w.lower() for w in tgt.split(' ')]),
+            )))
+
+        train_examples = list(filter(lambda x: 0.6 < x[1] < 0.8, train_examples))
+
+    with open(meta_test_path, 'rb') as f:
+        meta_test = pickle.load(f)
+
+    for i, m in enumerate(tqdm(meta_test)):
+        dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test[0], V)
+        print(len(data_dir))
+        meta_test[i][0] = dtrain
+
+    with open(meta_test_path+'_augmented.pkl', 'rb') as f:
+        pickle.dump(meta_test, f)
