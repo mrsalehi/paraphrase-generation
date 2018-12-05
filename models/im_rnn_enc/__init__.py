@@ -528,5 +528,5 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
         print(len(data_dir))
         meta_test[i][0] = dtrain
 
-    with open(meta_test_path+'_augmented.pkl', 'rb') as f:
+    with open(meta_test_path+'_augmented.pkl', 'wb') as f:
         pickle.dump(meta_test, f)
