@@ -475,6 +475,14 @@ def augment_dataset(train_examples, estimator, checkpoint_path, ds, V):
     additional_examples = []
     for i, p in enumerate(output):
         af = augment_formulas[i]
+
+
+        ag = p['joined'][0].decode('utf8')
+        ag = ' '.join(ag.split(' ')[:-1])
+
+        additional_examples.append(
+            (ag, af[2])
+        )
         try:
             print("cls:\t", af[2])
             print("base:\t", af[0])
@@ -484,16 +492,10 @@ def augment_dataset(train_examples, estimator, checkpoint_path, ds, V):
             print("iw:\t", iw)
             print("dw:\t", dw)
             print("tgt:\t", tgt)
+            print('augmented:\t', ag)
         except Exception as e:
             print(e)
             pass
-
-        ag = p['joined'][0].decode('utf8')
-        ag = ' '.join(ag.split(' ')[:-1])
-        print('augmented:\t', ag)
-        additional_examples.append(
-            (ag, af[2])
-        )
         print("===============================================\n\n")
 
     dtrain += additional_examples
