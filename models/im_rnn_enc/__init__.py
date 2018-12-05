@@ -535,7 +535,7 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
     for i, m in enumerate(tqdm(meta_test)):
         dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test[0], V)
         print("DTRRAAAAAAAAAAAAAIIIIIIIIIIIINNNNNNNN:", len(dtrain))
-        meta_test[i][0] = dtrain
+        meta_test[i] = (dtrain, meta_test[i][1], meta_test[i][2])
 
     with open(meta_test_path+'_augmented.pkl', 'wb') as f:
         pickle.dump(meta_test, f)
