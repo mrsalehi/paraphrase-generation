@@ -502,7 +502,7 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
 
     estimator = get_estimator(config, embed_matrix)
 
-    with open(data_dir / config.dataset.path / 'train.tsv', encoding='utf8') as f:
+    with open(str(data_dir / config.dataset.path / 'train.tsv'), encoding='utf8') as f:
         train_examples = []
         for l in tqdm(f, total=util.get_num_total_lines(data_dir / config.dataset.path / 'train.tsv')):
             l = l[:-1]
