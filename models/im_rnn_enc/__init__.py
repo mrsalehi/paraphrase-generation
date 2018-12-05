@@ -532,7 +532,7 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
 
     for i, m in enumerate(tqdm(meta_test)):
         dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test[0], V)
-        print(len(data_dir))
+        print("DTRRAAAAAAAAAAAAAIIIIIIIIIIIINNNNNNNN:", len(dtrain))
         meta_test[i][0] = dtrain
 
     with open(meta_test_path+'_augmented.pkl', 'wb') as f:
