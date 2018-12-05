@@ -484,6 +484,40 @@ def predict_cmd(config, data_dir, checkpoint_path=None):
     return output
 
 
+def input_fn_from_gen_multi(gen, vocab_table, batch_size):
+    if isinstance(vocab_table, dict):
+        vocab_table = vocab_table[vocab.STR_TO_INT]
+
+    base_dataset = list(gen())
+
+    pad_token = tf.constant(bytes(PAD_TOKEN, encoding='utf8'), dtype=tf.string)
+    pad_value = vocab_table.lookup(pad_token)
+
+    dataset_splits = []
+    for index in range(len(base_dataset[0])):
+        split = tf.data.Dataset.from_generator(
+            generator=get_generator(base_dataset, index),
+            output_types=(tf.string),
+            output_shapes=((None,))
+        )
+        split = split.map(lambda x: vocab_table.lookup(x))
+        split = split.padded_batch(
+            batch_size,
+            padded_shapes=[None],
+            padding_values=(pad_value)
+        )
+
+        dataset_splits.append(split)
+
+    dataset = tf.data.Dataset.zip(tuple(dataset_splits))
+
+    fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
+
+    dataset = dataset.zip((dataset, fake_label))
+
+    return dataset
+
+
 NUM_CANDIDATES = 5
 NUM_SAMPLING = 5
 
@@ -499,13 +533,16 @@ def generate_candidate(train_examples, base):
     return candidates
 
 
-def augment_dataset(train_examples, estimator, checkpoint_path, ds, V):
-    dtrain, dtest, classes = ds
+def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
+    # dtrain, dtest, classes = ds
 
+    index_mapping = []
     augment_formulas = []
-    for i, cls in dtrain:
-        candidates = generate_candidate(train_examples, i)
-        augment_formulas += [(i, c[0], cls) for c in candidates]
+    for e, (dtrain, _, _) in enumerate(tqdm(classes)):
+        for i, cls in dtrain:
+            candidates = generate_candidate(train_examples, i)
+            augment_formulas += [(i, c[0], cls) for c in candidates]
+            index_mapping += [e] * len(candidates)
 
     def augment_generator():
         for base, edit, c in augment_formulas:
@@ -516,33 +553,50 @@ def augment_dataset(train_examples, estimator, checkpoint_path, ds, V):
             yield base_words + edit_instance
 
     output = estimator.predict(
-        input_fn=lambda: input_fn_from_gen(augment_generator, vocab.create_vocab_lookup_tables(V)),
+        input_fn=lambda: input_fn_from_gen_multi(augment_generator, vocab.create_vocab_lookup_tables(V),
+                                                 len(augment_formulas)),
         checkpoint_path=checkpoint_path
     )
 
-    additional_examples = []
+    additional_examples = {}
     for i, p in enumerate(output):
         af = augment_formulas[i]
-        print("cls:\t", af[2])
-        print("base:\t", af[0])
-        edit = af[1]
-        src, tgt, iw, dw = parse_instance(edit)
-        print("src:\t", src)
-        print("iw:\t", iw)
-        print("dw:\t", dw)
-        print("tgt:\t", tgt)
-        print('augmented:\t', p['joined'][0])
-        additional_examples.append(
-            (p['joined'][0].decode('utf8'), af[2])
+        episode_id = index_mapping[i]
+        if episode_id not in additional_examples:
+            additional_examples[episode_id] = []
+
+        ag = p['joined'][0].decode('utf8')
+        ag = ' '.join(ag.split(' ')[:-1])
+
+        additional_examples[episode_id].append(
+            (ag, af[2])
         )
+        try:
+            print("cls:\t", af[2])
+            print("base:\t", af[0])
+            edit = af[1]
+            src, tgt, iw, dw = parse_instance(edit)
+            print("src:\t", src)
+            print("iw:\t", iw)
+            print("dw:\t", dw)
+            print("tgt:\t", tgt)
+            print('augmented:\t', ag)
+        except Exception as e:
+            print(e)
+            pass
         print("===============================================\n\n")
 
-    dtrain += additional_examples
+    # dtrain += additional_examples
 
-    for _ in range(3):
-        random.shuffle(dtrain)
+    for episode_id in additional_examples:
+        v = classes[episode_id][0] + additional_examples[episode_id]
+        assert len(v) == len(classes[episode_id][0]) * (1 + NUM_CANDIDATES)
+        for _ in range(3):
+            random.shuffle(v)
 
-    return dtrain
+        additional_examples[episode_id] = v
+
+    return additional_examples
 
 
 def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
@@ -556,7 +610,7 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
 
     estimator = get_estimator(config, embed_matrix)
 
-    with open(data_dir / config.dataset.path / 'train.tsv', encoding='utf8') as f:
+    with open(str(data_dir / config.dataset.path / 'train.tsv'), encoding='utf8') as f:
         train_examples = []
         for l in tqdm(f, total=util.get_num_total_lines(data_dir / config.dataset.path / 'train.tsv')):
             l = l[:-1]
@@ -572,10 +626,20 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
     with open(meta_test_path, 'rb') as f:
         meta_test = pickle.load(f)
 
-    for i, m in enumerate(tqdm(meta_test)):
-        dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test[0], V)
-        print(len(data_dir))
-        meta_test[i][0] = dtrain
+    # for i, m in enumerate(tqdm(meta_test)):
+    #     dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test[0], V)
+    #     assert len(dtrain) == len(meta_test[0]) * (1 + NUM_CANDIDATES)
+    #     print("DTRRAAAAAAAAAAAAAIIIIIIIIIIIINNNNNNNN:", len(dtrain))
+    #     meta_test[i] = (dtrain, meta_test[i][1], meta_test[i][2])
 
-    with open(meta_test_path+'_augmented.pkl', 'rb') as f:
-        pickle.dump(meta_test, f)
+    new_meta_test = []
+    all_dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test[:4], V)
+    for episode_id in all_dtrain:
+        new_meta_test.append((
+            all_dtrain[episode_id],
+            meta_test[episode_id][1],
+            meta_test[episode_id][2],
+        ))
+
+    with open(meta_test_path + '_augmented.pkl', 'wb') as f:
+        pickle.dump(new_meta_test, f)
