@@ -2,6 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.rnn as tf_rnn
 from tensorflow.contrib import seq2seq
 from tensorflow.contrib.framework import nest
+from tensorflow.contrib.seq2seq import FinalBeamSearchDecoderOutput
 
 from models.common import sequence
 
@@ -262,9 +263,7 @@ def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
             length_penalty_weight=0.0
         )
 
-        outputs, _, _ = seq2seq.dynamic_decode(decoder, maximum_iterations=40)
-
-        return outputs
+        return seq2seq.dynamic_decode(decoder, maximum_iterations=40)
 
 
 def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
@@ -328,7 +327,10 @@ def rnn_output(decoder_output):
 
 
 def sample_id(decoder_output):
-    output = decoder_output[0].sample_id
+    if isinstance(decoder_output[0], FinalBeamSearchDecoderOutput):
+        output = decoder_output[0].predicted_ids
+    else:
+        output = decoder_output[0].sample_id
     return output
 
 

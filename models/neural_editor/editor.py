@@ -38,7 +38,7 @@ def prepare_decoder_input_output(tgt_words, tgt_len, vocab_table):
     return dec_input, dec_input_len, dec_output, dec_output_len
 
 
-def editor_train(source_words, target_words, insert_words, delete_words,
+def editor_train(base_words, source_words, target_words, insert_words, delete_words,
                  embed_matrix, vocab_table,
                  hidden_dim, agenda_dim, edit_dim, num_encoder_layers, num_decoder_layers, attn_dim,
                  ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
@@ -46,6 +46,7 @@ def editor_train(source_words, target_words, insert_words, delete_words,
     batch_size = tf.shape(source_words)[0]
 
     # [batch]
+    base_len = seq.length_pre_embedding(base_words)
     src_len = seq.length_pre_embedding(source_words)
     tgt_len = seq.length_pre_embedding(target_words)
     iw_len = seq.length_pre_embedding(insert_words)
@@ -55,15 +56,16 @@ def editor_train(source_words, target_words, insert_words, delete_words,
     embeddings = vocab.init_embeddings(embed_matrix)
 
     # [batch x max_len x embed_dim]
-    src_word_embeds = vocab.embed_tokens(source_words)
-    tgt_word_embeds = vocab.embed_tokens(target_words)
+    base_word_embeds = vocab.embed_tokens(base_words)
+    # src_word_embeds = vocab.embed_tokens(source_words)
+    # tgt_word_embeds = vocab.embed_tokens(target_words)
     insert_word_embeds = vocab.embed_tokens(insert_words)
     delete_word_embeds = vocab.embed_tokens(delete_words)
 
     # [batch x max_len x rnn_out_dim], [batch x rnn_out_dim]
-    src_sent_hidden_states, src_sent_embed = encoder.source_sent_encoder(
-        src_word_embeds,
-        src_len,
+    base_sent_hidden_states, base_sent_embed = encoder.source_sent_encoder(
+        base_word_embeds,
+        base_len,
         hidden_dim, num_encoder_layers, dropout_keep
     )
 
@@ -83,22 +85,29 @@ def editor_train(source_words, target_words, insert_words, delete_words,
             )
 
     # [batch x agenda_dim]
-    input_agenda = agn.linear(src_sent_embed, edit_vector, agenda_dim)
+    input_agenda = agn.linear(base_sent_embed, edit_vector, agenda_dim)
 
     train_dec_inp, train_dec_inp_len, \
     train_dec_out, train_dec_out_len = prepare_decoder_input_output(target_words, tgt_len, vocab_table)
 
     train_decoder = decoder.train_decoder(input_agenda, embeddings, train_dec_inp,
-                                          src_sent_hidden_states, insert_word_embeds, delete_word_embeds,
+                                          base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
                                           train_dec_inp_len, src_len, iw_len, dw_len,
                                           attn_dim, hidden_dim, num_decoder_layers, swap_memory)
 
     infr_decoder = decoder.greedy_eval_decoder(input_agenda, embeddings,
                                                vocab.get_token_id(vocab.START_TOKEN, vocab_table),
                                                vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
-                                               src_sent_hidden_states, insert_word_embeds, delete_word_embeds,
+                                               base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
                                                src_len, iw_len, dw_len,
                                                attn_dim, hidden_dim, num_decoder_layers, max_sent_length)
+
+    # infr_decoder = decoder.eval_decoder(input_agenda, embeddings,
+    #                                            vocab.get_token_id(vocab.START_TOKEN, vocab_table),
+    #                                            vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
+    #                                            base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
+    #                                            src_len, iw_len, dw_len,
+    #                                            attn_dim, hidden_dim, num_decoder_layers, 5)
 
     return train_decoder, infr_decoder, train_dec_out, train_dec_out_len
 
