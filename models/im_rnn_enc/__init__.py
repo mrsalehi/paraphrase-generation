@@ -273,11 +273,16 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         )
 
     elif mode == tf.estimator.ModeKeys.PREDICT:
+        lengths = decoder.seq_length(infer_decoder_output)
+        tokens = decoder.str_tokens(infer_decoder_output, vocab_i2s)
         preds = {
-            'str_tokens': decoder.str_tokens(infer_decoder_output, vocab_i2s),
+            'str_tokens': tokens,
             'sample_id': decoder.sample_id(infer_decoder_output),
-            'lengths': decoder.seq_length(infer_decoder_output),
-            'attn_scores': decoder.attention_score(infer_decoder_output)
+            'lengths': lengths,
+            'joined': metrics.join_tokens(tokens, lengths),
+            # 'attn_scores_0': attn_scores[0],
+            # 'attn_scores_1': attn_scores[1],
+            # 'attn_scores_2': attn_scores[2],
         }
         return tf.estimator.EstimatorSpec(
             mode,
