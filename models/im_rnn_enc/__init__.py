@@ -538,6 +538,8 @@ def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
         except Exception as e:
             print(e)
             pass
+        print("###")
+        print(i+1, len(augment_formulas))
         print("===============================================\n\n")
 
     # dtrain += additional_examples
