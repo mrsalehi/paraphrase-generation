@@ -436,6 +436,40 @@ def input_fn_from_gen(gen, vocab_table):
 
     return dataset
 
+def input_fn_from_gen_multi(gen, vocab_table, batch_size):
+    if isinstance(vocab_table, dict):
+        vocab_table = vocab_table[vocab.STR_TO_INT]
+
+    base_dataset = list(gen())
+
+    pad_token = tf.constant(bytes(PAD_TOKEN, encoding='utf8'), dtype=tf.string)
+    pad_value = vocab_table.lookup(pad_token)
+
+    dataset_splits = []
+    for index in range(len(base_dataset[0])):
+        split = tf.data.Dataset.from_generator(
+            generator=get_generator(base_dataset, index),
+            output_types=(tf.string),
+            output_shapes=((None,))
+        )
+        split = split.map(lambda x: vocab_table.lookup(x))
+        split = split.padded_batch(
+            batch_size,
+            padded_shapes=[None],
+            padding_values=(pad_value)
+        )
+
+        dataset_splits.append(split)
+
+    dataset = tf.data.Dataset.zip(tuple(dataset_splits))
+
+    fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
+
+    dataset = dataset.zip((dataset, fake_label))
+
+    return dataset
+
+
 NUM_CANDIDATES = 5
 NUM_SAMPLING = 5
 
@@ -468,14 +502,14 @@ def augment_dataset(train_examples, estimator, checkpoint_path, ds, V):
             yield base_words + edit_instance
 
     output = estimator.predict(
-        input_fn=lambda: input_fn_from_gen(augment_generator, vocab.create_vocab_lookup_tables(V)),
+        input_fn=lambda: input_fn_from_gen_multi(augment_generator, vocab.create_vocab_lookup_tables(V),
+                                                 len(augment_formulas)),
         checkpoint_path=checkpoint_path
     )
 
     additional_examples = []
     for i, p in enumerate(output):
         af = augment_formulas[i]
-
 
         ag = p['joined'][0].decode('utf8')
         ag = ' '.join(ag.split(' ')[:-1])
