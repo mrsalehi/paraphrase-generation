@@ -41,10 +41,11 @@ def main():
     if mode == 'eval':
         neural_editor.eval(config, data_dir, checkpoint)
 
-    if mode == 'predict':
+    if mode == 'augment':
         # neural_editor.predict_cmd(config, data_dir, checkpoint)
+        meta_test = sys.argv[5]
         neural_editor.augment_meta_test(config,
-                                        '/Users/amirhosein/Development/PycharmProjects/dbpedia/pdata/meta_test/5w1s_e100.pkl',
+                                        meta_test,
                                         data_dir, checkpoint)
 
 
