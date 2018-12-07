@@ -554,7 +554,7 @@ def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
 
     output = estimator.predict(
         input_fn=lambda: input_fn_from_gen_multi(augment_generator, vocab.create_vocab_lookup_tables(V),
-                                                 len(augment_formulas)),
+                                                 10),
         checkpoint_path=checkpoint_path
     )
 
@@ -584,6 +584,8 @@ def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
         except Exception as e:
             print(e)
             pass
+        print("###")
+        print(i+1, len(augment_formulas))
         print("===============================================\n\n")
 
     # dtrain += additional_examples
@@ -633,7 +635,7 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
     #     meta_test[i] = (dtrain, meta_test[i][1], meta_test[i][2])
 
     new_meta_test = []
-    all_dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test[:4], V)
+    all_dtrain = augment_dataset(train_examples, estimator, checkpoint_path, meta_test, V)
     for episode_id in all_dtrain:
         new_meta_test.append((
             all_dtrain[episode_id],
