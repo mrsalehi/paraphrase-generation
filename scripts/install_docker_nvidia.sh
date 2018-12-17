@@ -7,16 +7,17 @@ sudo apt-get install -y --no-install-recommends \
     curl \
     software-properties-common
 
-curl -fsSL 'https://sks-keyservers.net/pks/lookup?op=get&search=0xee6d536cf7dc86e2d7d56f59a178ac6c6238f52e' | sudo apt-key add -
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo apt-key fingerprint 0EBFCD88
 
 sudo add-apt-repository \
-   "deb https://packages.docker.com/1.13/apt/repo/ \
-   ubuntu-$(lsb_release -cs) \
-   main"
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
 
 sudo apt-get update
 
-sudo apt-get -y install docker-engine
+sudo apt-get -y install docker-ce
 
 # If you have nvidia-docker 1.0 installed: we need to remove it and all existing GPU containers
 docker volume ls -q -f driver=nvidia-docker | xargs -r -I{} -n1 docker ps -q -a -f volume={} | xargs -r docker rm -f
