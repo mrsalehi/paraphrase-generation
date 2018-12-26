@@ -651,7 +651,7 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
 def augment_debug_dataset(debug_examples, estimator, checkpoint_path, V):
     input_examples = []
     mapping = {}
-    for i, (base, src, dst, c) in debug_examples:
+    for i, (base, src, dst, c) in enumerate(debug_examples):
         mapping[i] = (base, src, dst, c)
         input_examples.append((base, '\t'.join([src, dst])))
 
@@ -675,7 +675,7 @@ def augment_debug_dataset(debug_examples, estimator, checkpoint_path, V):
         ag = p['joined'][0].decode('utf8')
         ag = ' '.join(ag.split(' ')[:-1])
 
-        result.append(af + ag)
+        result.append(af + tuple(ag))
 
     return result
 
@@ -696,5 +696,5 @@ def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None):
 
     debugged = augment_debug_dataset(debug_examples, estimator, checkpoint_path, V)
 
-    with open("debugged_%s" % debug_dataset, encoding='utf8') as f:
-        json.dump(debugged, f, ensure_ascii='False')
+    with open("%s_debugged" % debug_dataset, 'w',encoding='utf8') as f:
+        json.dump(debugged, f)
