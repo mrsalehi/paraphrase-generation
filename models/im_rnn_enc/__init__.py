@@ -559,7 +559,7 @@ def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
 def augment_debug_dataset(debug_examples, estimator, checkpoint_path, V):
     input_examples = []
     mapping = {}
-    for i, (base, src, dst, c) in debug_examples:
+    for i, (base, src, dst, c) in enumerate(debug_examples):
         mapping[i] = (base, src, dst, c)
         input_examples.append((base, '\t'.join([src, dst])))
 
