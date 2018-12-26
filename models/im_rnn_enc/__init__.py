@@ -583,7 +583,7 @@ def augment_debug_dataset(debug_examples, estimator, checkpoint_path, V):
         ag = p['joined'][0].decode('utf8')
         ag = ' '.join(ag.split(' ')[:-1])
 
-        result.append(af + ag)
+        result.append(af + tuple(ag))
 
     return result
 
