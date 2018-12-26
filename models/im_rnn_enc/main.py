@@ -22,11 +22,6 @@ def main():
     except:
         mode = 'train'
 
-    try:
-        checkpoint = sys.argv[4]
-    except:
-        checkpoint = None
-
     config = Config.from_file(config_path)
     config.put('model_dir', str(data_dir / config.model_dir))
 
@@ -40,8 +35,23 @@ def main():
 
     if mode == 'predict':
         # neural_editor.predict_cmd(config, data_dir, checkpoint)
+        try:
+            checkpoint = sys.argv[4]
+        except:
+            checkpoint = None
+
         meta_test = sys.argv[5]
-        im_rnn_enc.augment_meta_test(config, meta_test,data_dir, checkpoint)
+        im_rnn_enc.augment_meta_test(config, meta_test, data_dir, checkpoint)
+
+    if mode == 'debug':
+        try:
+            checkpoint = sys.argv[4]
+        except:
+            checkpoint = None
+
+        debug_dataset = sys.argv[5]
+
+        im_rnn_enc.augment_debug(config, debug_dataset, data_dir, checkpoint)
 
 
 if __name__ == '__main__':

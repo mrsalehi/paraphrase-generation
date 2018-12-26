@@ -48,6 +48,16 @@ def main():
                                         meta_test,
                                         data_dir, checkpoint)
 
+    if mode == 'debug':
+        try:
+            checkpoint = sys.argv[4]
+        except:
+            checkpoint = None
+
+        debug_dataset = sys.argv[5]
+
+        neural_editor.augment_debug(config, debug_dataset, data_dir, checkpoint)
+
 
 if __name__ == '__main__':
     main()

@@ -1,3 +1,4 @@
+import json
 import pickle
 import random
 
@@ -539,7 +540,7 @@ def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
             print(e)
             pass
         print("###")
-        print(i+1, len(augment_formulas))
+        print(i + 1, len(augment_formulas))
         print("===============================================\n\n")
 
     # dtrain += additional_examples
@@ -553,6 +554,38 @@ def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
         additional_examples[episode_id] = v
 
     return additional_examples
+
+
+def augment_debug_dataset(debug_examples, estimator, checkpoint_path, V):
+    input_examples = []
+    mapping = {}
+    for i, (base, src, dst, c) in debug_examples:
+        mapping[i] = (base, src, dst, c)
+        input_examples.append((base, '\t'.join([src, dst])))
+
+    def augment_generator():
+        for base, edit in input_examples:
+            base_words = [w.lower() for w in base.split(' ')]
+            base_words = tuple([convert_to_bytes(base_words)])
+            edit_instance = parse_instance(edit)
+
+            yield base_words + edit_instance
+
+    output = estimator.predict(
+        input_fn=lambda: input_fn_from_gen_multi(augment_generator, vocab.create_vocab_lookup_tables(V), 10),
+        checkpoint_path=checkpoint_path
+    )
+
+    result = []
+    for i, p in enumerate(output):
+        af = mapping[i]
+
+        ag = p['joined'][0].decode('utf8')
+        ag = ' '.join(ag.split(' ')[:-1])
+
+        result.append(af + ag)
+
+    return result
 
 
 def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
@@ -599,3 +632,23 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
 
     with open(meta_test_path + '_augmented.pkl', 'wb') as f:
         pickle.dump(new_meta_test, f)
+
+
+def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None):
+    V, embed_matrix = vocab.read_word_embeddings(
+        data_dir / 'word_vectors' / config.editor.wvec_path,
+        config.editor.word_dim,
+        config.editor.vocab_size
+    )
+
+    config.put('optim.batch_size', 1)
+
+    estimator = get_estimator(config, embed_matrix)
+
+    with open(str(data_dir / debug_dataset), 'rb') as f:
+        debug_examples = pickle.load(f)
+
+    debugged = augment_debug_dataset(debug_examples, estimator, checkpoint_path, V)
+
+    with open("debugged_%s" % debug_dataset, encoding='utf8') as f:
+        json.dump(debugged, f)
