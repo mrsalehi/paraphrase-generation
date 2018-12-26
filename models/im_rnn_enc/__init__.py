@@ -650,5 +650,5 @@ def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None):
 
     debugged = augment_debug_dataset(debug_examples, estimator, checkpoint_path, V)
 
-    with open("debugged_%s" % debug_dataset, encoding='utf8') as f:
+    with open("%s_debugged" % debug_dataset, 'w',encoding='utf8') as f:
         json.dump(debugged, f)
