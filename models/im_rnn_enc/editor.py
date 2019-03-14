@@ -1,46 +1,17 @@
 import tensorflow as tf
-import tensorflow.contrib.seq2seq as seq2seq
-import numpy as np
 
-from models.common import vocab
 import models.common.sequence as seq
-
-from models.im_rnn_enc import encoder
-from models.im_rnn_enc import edit_encoder
-from models.im_rnn_enc import agenda as agn
-from models.im_rnn_enc import decoder
-
-
-def prepare_decoder_input_output(tgt_words, tgt_len, vocab_table):
-    """
-    Args:
-        tgt_words: tensor of word ids, [batch x max_len]
-        tgt_len: vector of sentence lengths, [batch]
-        vocab_table: instance of tf.vocab_lookup_table
-
-    Returns:
-        dec_input: tensor of word ids, [batch x max_len+1]
-        dec_input_len: vector of sentence lengths, [batch]
-        dec_output: tensor of word ids, [batch x max_len+1]
-        dec_output_len: vector of sentence lengths, [batch]
-
-    """
-    start_token_id = vocab.get_token_id(vocab.START_TOKEN, vocab_table)
-    stop_token_id = vocab.get_token_id(vocab.STOP_TOKEN, vocab_table)
-    pad_token_id = vocab.get_token_id(vocab.PAD_TOKEN, vocab_table)
-
-    dec_input = decoder.prepare_decoder_inputs(tgt_words, start_token_id)
-    dec_input_len = seq.length_pre_embedding(dec_input)
-
-    dec_output = decoder.prepare_decoder_output(tgt_words, tgt_len, stop_token_id, pad_token_id)
-    dec_output_len = seq.length_pre_embedding(dec_output)
-
-    return dec_input, dec_input_len, dec_output, dec_output_len
+from models.common import vocab
+from models.im_rnn_enc.edit_encoder import rnn_encoder
+from models.neural_editor import agenda as agn
+from models.neural_editor import decoder
+from models.neural_editor import encoder
+from models.neural_editor.edit_encoder import random_noise_encoder
+from models.neural_editor.editor import prepare_decoder_input_output
 
 
 def editor_train(base_words, source_words, target_words, insert_words, delete_words,
-                 embed_matrix, vocab_table,
-                 hidden_dim, agenda_dim, edit_dim, num_encoder_layers, num_decoder_layers, attn_dim,
+                 hidden_dim, agenda_dim, edit_dim, num_encoder_layers, num_decoder_layers, attn_dim, beam_width,
                  ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
                  max_sent_length, dropout_keep, lamb_reg, norm_eps, norm_max, kill_edit, draw_edit, swap_memory):
     batch_size = tf.shape(source_words)[0]
@@ -53,7 +24,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
     dw_len = seq.length_pre_embedding(delete_words)
 
     # variable of shape [vocab_size, embed_dim]
-    embeddings = vocab.init_embeddings(embed_matrix)
+    embeddings = vocab.get_embeddings()
 
     # [batch x max_len x embed_dim]
     base_word_embeds = vocab.embed_tokens(base_words)
@@ -66,7 +37,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
     base_sent_hidden_states, base_sent_embed = encoder.source_sent_encoder(
         base_word_embeds,
         base_len,
-        hidden_dim, num_encoder_layers, dropout_keep
+        hidden_dim, num_encoder_layers, dropout_keep, swap_memory=swap_memory
     )
 
     # [batch x edit_dim]
@@ -74,9 +45,9 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
         edit_vector = tf.zeros(shape=(batch_size, edit_dim))
     else:
         if draw_edit:
-            edit_vector = edit_encoder.random_noise_encoder(batch_size, edit_dim, norm_max)
+            edit_vector = random_noise_encoder(batch_size, edit_dim, norm_max)
         else:
-            edit_vector = edit_encoder.rnn_encoder(
+            edit_vector = rnn_encoder(
                 src_word_embeds, tgt_word_embeds,
                 insert_word_embeds, delete_word_embeds,
                 src_len, tgt_len,
@@ -90,19 +61,20 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
     input_agenda = agn.linear(base_sent_embed, edit_vector, agenda_dim)
 
     train_dec_inp, train_dec_inp_len, \
-    train_dec_out, train_dec_out_len = prepare_decoder_input_output(target_words, tgt_len, vocab_table)
+    train_dec_out, train_dec_out_len = prepare_decoder_input_output(target_words, tgt_len, None)
 
     train_decoder = decoder.train_decoder(input_agenda, embeddings, train_dec_inp,
                                           base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
                                           train_dec_inp_len, src_len, iw_len, dw_len,
                                           attn_dim, hidden_dim, num_decoder_layers, swap_memory)
 
-    infr_decoder = decoder.greedy_eval_decoder(input_agenda, embeddings,
-                                               vocab.get_token_id(vocab.START_TOKEN, vocab_table),
-                                               vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
-                                               base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
-                                               src_len, iw_len, dw_len,
-                                               attn_dim, hidden_dim, num_decoder_layers, max_sent_length)
+    infr_decoder = decoder.beam_eval_decoder(input_agenda, embeddings,
+                                             vocab.get_token_id(vocab.START_TOKEN),
+                                             vocab.get_token_id(vocab.STOP_TOKEN),
+                                             base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
+                                             src_len, iw_len, dw_len,
+                                             attn_dim, hidden_dim, num_decoder_layers, max_sent_length, beam_width,
+                                             swap_memory)
 
     return train_decoder, infr_decoder, train_dec_out, train_dec_out_len
 

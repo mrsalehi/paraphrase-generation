@@ -1,58 +1,9 @@
-import sys
-from pathlib import Path
+import fire
 
 from models import im_rnn_enc
-from models.common import util
-from models.common.config import Config
-
-
-def put_epoch_num(config, data_dir):
-    p = data_dir / config.dataset.path / 'train.tsv'
-    total_num_examples = util.get_num_total_lines(p)
-    num_batch_per_epoch = total_num_examples // config.optim.batch_size
-    num_epoch = config.optim.max_iters // num_batch_per_epoch + 1
-    config.put('optim.num_epoch', num_epoch)
-
-
-def main():
-    config_path = sys.argv[1]
-    data_dir = Path(sys.argv[2])
-    try:
-        mode = sys.argv[3]
-    except:
-        mode = 'train'
-
-    config = Config.from_file(config_path)
-    config.put('model_dir', str(data_dir / config.model_dir))
-
-    put_epoch_num(config, data_dir)
-
-    print(config_path)
-    print(config)
-
-    if mode == 'train':
-        im_rnn_enc.train(config, data_dir)
-
-    if mode == 'predict':
-        # neural_editor.predict_cmd(config, data_dir, checkpoint)
-        try:
-            checkpoint = sys.argv[4]
-        except:
-            checkpoint = None
-
-        meta_test = sys.argv[5]
-        im_rnn_enc.augment_meta_test(config, meta_test, data_dir, checkpoint)
-
-    if mode == 'debug':
-        try:
-            checkpoint = sys.argv[4]
-        except:
-            checkpoint = None
-
-        debug_dataset = sys.argv[5]
-
-        im_rnn_enc.augment_debug(config, debug_dataset, data_dir, checkpoint)
-
+from models.neural_editor.main import ModelRunner
 
 if __name__ == '__main__':
-    main()
+    cls = ModelRunner
+    cls.model = im_rnn_enc
+    fire.Fire(cls)

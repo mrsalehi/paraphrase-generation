@@ -14,6 +14,8 @@ from models.common.sequence import length_pre_embedding
 from models.common.vocab import PAD_TOKEN
 from models.neural_editor import editor, optimizer, decoder
 
+NAME = 'neural_editor'
+
 DATASET_CACHE = {}
 
 
@@ -242,12 +244,12 @@ def get_extra_summary_logger(pred_op, bleu_op, every_n_step):
     def print_pred_summary(pred_result):
         output_str = ''
         for src, iw, dw, tgt, pred in pred_result:
-            output_str += 'SOURCE: %s\n' % src
-            output_str += 'INSERT: %s\n' % iw
-            output_str += 'DELETE: %s\n' % dw
-            output_str += 'TARGET: %s\n\n' % tgt
-            output_str += '%s\n' % pred
-            output_str += '####################################################################\n'
+            output_str += 'SOURCE: %s\n' % str(src, encoding='utf8')
+            output_str += 'INSERT: [ %s ]\n' % str(iw, encoding='utf8')
+            output_str += 'DELETE: [ %s ]\n' % str(dw, encoding='utf8')
+            output_str += 'TARGET: %s\n' % str(tgt, encoding='utf8')
+            output_str += '---\n%s\n---\n\n' % str(pred, encoding='utf8')
+            output_str += '=========================\n\n'
 
         return output_str
 
@@ -270,6 +272,37 @@ def get_eval_hook(estimator, input_fn, name, every_n_steps):
     )
 
 
+def get_avg_bleu_smmary(tgt_tokens, pred_tokens, tgt_len, pred_len):
+    if pred_tokens.shape.ndims > 2:
+        best_tokens = pred_tokens[:, :, 0]
+        best_len = pred_len[:, 0]
+    else:
+        best_tokens = pred_tokens
+        best_len = pred_len
+
+    bleu_score = metrics.create_bleu_metric_ops(tgt_tokens, best_tokens, tgt_len, best_len)
+    avg_bleu = tf.reduce_mean(bleu_score)
+
+    return avg_bleu
+
+
+def get_trace_summary(vocab_i2s,
+                      pred_tokens, tgt_tokens,
+                      src_words, inserted_words, deleted_words,
+                      pred_len, tgt_len):
+    if pred_tokens.shape.ndims > 2:
+        pred_joined = metrics.join_beams(pred_tokens, pred_len)
+    else:
+        pred_joined = metrics.join_tokens(pred_tokens, pred_len)
+
+    tgt_joined = metrics.join_tokens(tgt_tokens, tgt_len)
+    src_joined = metrics.join_tokens(vocab_i2s.lookup(src_words), length_pre_embedding(src_words))
+    iw_joined = metrics.join_tokens(vocab_i2s.lookup(inserted_words), length_pre_embedding(inserted_words), ', ')
+    dw_joined = metrics.join_tokens(vocab_i2s.lookup(deleted_words), length_pre_embedding(deleted_words), ', ')
+
+    return tf.concat([src_joined, iw_joined, dw_joined, tgt_joined, pred_joined], axis=1)
+
+
 def add_extra_summary(vocab_i2s, decoder_output, src_words, tgt_words, inserted_words, deleted_words, collections=None):
     pred_tokens = decoder.str_tokens(decoder_output, vocab_i2s)
     pred_len = decoder.seq_length(decoder_output)
@@ -277,20 +310,14 @@ def add_extra_summary(vocab_i2s, decoder_output, src_words, tgt_words, inserted_
     tgt_tokens = vocab_i2s.lookup(tgt_words)
     tgt_len = length_pre_embedding(tgt_words)
 
-    bleu_score = metrics.create_bleu_metric_ops(tgt_tokens, pred_tokens, tgt_len, pred_len)
-    avg_bleu = tf.reduce_mean(bleu_score)
+    avg_bleu = get_avg_bleu_smmary(tgt_tokens, pred_tokens, tgt_len, pred_len)
     tf.summary.scalar('bleu', avg_bleu, collections)
 
-    pred_joined = metrics.join_tokens(pred_tokens, pred_len)
-    tgt_joined = metrics.join_tokens(tgt_tokens, tgt_len)
-    src_joined = metrics.join_tokens(vocab_i2s.lookup(src_words), length_pre_embedding(src_words))
-    iw_joined = metrics.join_tokens(vocab_i2s.lookup(inserted_words), length_pre_embedding(inserted_words), ', ')
-    dw_joined = metrics.join_tokens(vocab_i2s.lookup(deleted_words), length_pre_embedding(deleted_words), ', ')
+    trace_summary = get_trace_summary(vocab_i2s, pred_tokens, tgt_tokens, src_words, inserted_words, deleted_words,
+                                      pred_len, tgt_len)
+    tf.summary.text('trace', trace_summary, collections)
 
-    pred_summary = tf.concat([src_joined, iw_joined, dw_joined, tgt_joined, pred_joined], axis=1)
-    tf.summary.text('trace', pred_summary, collections)
-
-    return avg_bleu, pred_summary
+    return avg_bleu, trace_summary
 
 
 def model_fn(features, mode, config, embedding_matrix, vocab_tables):
@@ -303,13 +330,13 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     vocab_s2i = vocab_tables[vocab.STR_TO_INT]
     vocab_i2s = vocab_tables[vocab.INT_TO_STR]
 
+    vocab.init_embeddings(embedding_matrix)
+
     train_decoder_output, infer_decoder_output, \
     gold_dec_out, gold_dec_out_len = editor.editor_train(
         base_words, src_words, tgt_words, inserted_words, deleted_words, embedding_matrix, vocab_s2i,
         config.editor.hidden_dim, config.editor.agenda_dim, config.editor.edit_dim,
-        config.editor.encoder_layers, config.editor.decoder_layers, config.editor.attention_dim,
-        config.editor.edit_enc.ctx_hidden_dim, config.editor.edit_enc.ctx_hidden_layer,
-        config.editor.edit_enc.wa_hidden_dim, config.editor.edit_enc.wa_hidden_layer,
+        config.editor.encoder_layers, config.editor.decoder_layers, config.editor.attention_dim, config.editor.beam_width,
         config.editor.max_sent_length, config.editor.dropout_keep, config.editor.lamb_reg,
         config.editor.norm_eps, config.editor.norm_max, config.editor.kill_edit,
         config.editor.draw_edit, config.editor.use_swap_memory
@@ -320,7 +347,7 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         tf.summary.scalar('grad_norm', gradients_norm)
-        avg_bleu, pred_summary = add_extra_summary(vocab_i2s, train_decoder_output,
+        avg_bleu, pred_summary = add_extra_summary(vocab_i2s, infer_decoder_output,
                                                    src_words, tgt_words, inserted_words, deleted_words,
                                                    ['extra'])
 
@@ -335,7 +362,7 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         )
 
     elif mode == tf.estimator.ModeKeys.EVAL:
-        avg_bleu, pred_summary = add_extra_summary(vocab_i2s, train_decoder_output,
+        avg_bleu, pred_summary = add_extra_summary(vocab_i2s, infer_decoder_output,
                                                    src_words, tgt_words, inserted_words, deleted_words)
 
         extra_summary_logger = get_extra_summary_logger(pred_summary, avg_bleu, 1)
@@ -365,7 +392,7 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         )
 
 
-def get_estimator(config, embed_matrix):
+def get_estimator(config, embed_matrix, my_model_fn=model_fn):
     run_config = tf.estimator.RunConfig(
         model_dir=config.model_dir,
         tf_random_seed=config.seed,
@@ -376,7 +403,7 @@ def get_estimator(config, embed_matrix):
     )
 
     estimator = tf.estimator.Estimator(
-        model_fn=lambda features, labels, mode, params: model_fn(
+        model_fn=lambda features, labels, mode, params: my_model_fn(
             features,
             mode,
             params,
@@ -391,46 +418,46 @@ def get_estimator(config, embed_matrix):
     return estimator
 
 
-def train(config, data_dir):
+def train(config, data_dir, my_model_fn=model_fn):
     V, embed_matrix = vocab.read_word_embeddings(
         data_dir / 'word_vectors' / config.editor.wvec_path,
         config.editor.word_dim,
         config.editor.vocab_size
     )
 
-    estimator = get_estimator(config, embed_matrix)
+    estimator = get_estimator(config, embed_matrix, my_model_fn)
 
     return estimator.train(
         input_fn=lambda: train_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
-        hooks=[
-            get_eval_hook(estimator,
-                          lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
-                          name='eval',
-                          every_n_steps=config.eval.eval_steps),
-
-            get_eval_hook(estimator,
-                          lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
-                                                num_examples=config.eval.big_num_examples),
-                          name='eval_big',
-                          every_n_steps=config.eval.big_eval_steps),
-
-            get_eval_hook(estimator,
-                          lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
-                                                file_name='train.tsv', num_examples=config.eval.big_num_examples),
-                          name='train_big',
-                          every_n_steps=config.eval.big_eval_steps),
-        ]
+        # hooks=[
+        #     get_eval_hook(estimator,
+        #                   lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
+        #                   name='eval',
+        #                   every_n_steps=config.eval.eval_steps),
+        #
+        #     get_eval_hook(estimator,
+        #                   lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
+        #                                         num_examples=config.eval.big_num_examples),
+        #                   name='eval_big',
+        #                   every_n_steps=config.eval.big_eval_steps),
+        #
+        #     get_eval_hook(estimator,
+        #                   lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
+        #                                         file_name='train.tsv', num_examples=config.eval.big_num_examples),
+        #                   name='train_big',
+        #                   every_n_steps=config.eval.big_eval_steps),
+        # ]
     )
 
 
-def eval(config, data_dir, checkpoint_path=None):
+def eval(config, data_dir, checkpoint_path=None, my_model_fn=model_fn):
     V, embed_matrix = vocab.read_word_embeddings(
         data_dir / 'word_vectors' / config.editor.wvec_path,
         config.editor.word_dim,
         config.editor.vocab_size
     )
 
-    estimator = get_estimator(config, embed_matrix)
+    estimator = get_estimator(config, embed_matrix, my_model_fn)
 
     output = estimator.evaluate(
         input_fn=lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V), num_examples=1e10),
@@ -440,7 +467,7 @@ def eval(config, data_dir, checkpoint_path=None):
     return output
 
 
-def predict(config, data_dir, checkpoint_path=None):
+def predict(config, data_dir, checkpoint_path=None, my_model_fn=model_fn):
     V, embed_matrix = vocab.read_word_embeddings(
         data_dir / 'word_vectors' / config.editor.wvec_path,
         config.editor.word_dim,
@@ -449,7 +476,7 @@ def predict(config, data_dir, checkpoint_path=None):
 
     config.put('optim.batch_size', 1)
 
-    estimator = get_estimator(config, embed_matrix)
+    estimator = get_estimator(config, embed_matrix, my_model_fn)
 
     output = estimator.predict(
         input_fn=lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V), num_examples=10),
@@ -602,7 +629,7 @@ def augment_dataset(train_examples, estimator, checkpoint_path, classes, V):
     return additional_examples
 
 
-def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
+def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None, my_model_fn=model_fn):
     V, embed_matrix = vocab.read_word_embeddings(
         data_dir / 'word_vectors' / config.editor.wvec_path,
         config.editor.word_dim,
@@ -611,7 +638,7 @@ def augment_meta_test(config, meta_test_path, data_dir, checkpoint_path=None):
 
     config.put('optim.batch_size', 1)
 
-    estimator = get_estimator(config, embed_matrix)
+    estimator = get_estimator(config, embed_matrix, my_model_fn)
 
     with open(str(data_dir / config.dataset.path / 'train.tsv'), encoding='utf8') as f:
         train_examples = []
@@ -680,7 +707,7 @@ def augment_debug_dataset(debug_examples, estimator, checkpoint_path, V):
     return result
 
 
-def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None):
+def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None, my_model_fn=model_fn):
     V, embed_matrix = vocab.read_word_embeddings(
         data_dir / 'word_vectors' / config.editor.wvec_path,
         config.editor.word_dim,
@@ -689,12 +716,12 @@ def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None):
 
     config.put('optim.batch_size', 1)
 
-    estimator = get_estimator(config, embed_matrix)
+    estimator = get_estimator(config, embed_matrix, my_model_fn)
 
     with open(str(data_dir / debug_dataset), 'rb') as f:
         debug_examples = pickle.load(f)
 
     debugged = augment_debug_dataset(debug_examples, estimator, checkpoint_path, V)
 
-    with open("%s_debugged" % debug_dataset, 'w',encoding='utf8') as f:
+    with open("%s_debugged" % debug_dataset, 'w', encoding='utf8') as f:
         json.dump(debugged, f)

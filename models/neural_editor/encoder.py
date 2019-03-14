@@ -8,7 +8,7 @@ OPS_NAME = 'source_sentence_encoder'
 
 def bidirectional_encoder(src, src_length,
                           hidden_dim, num_layer,
-                          dropout_keep, use_dropout=False, reuse=None, name=None):
+                          dropout_keep, swap_memory=False, use_dropout=False, reuse=None, name=None):
     with tf.variable_scope(name, 'encoder', values=[src, src_length], reuse=reuse):
         def create_rnn_layer(layer_num, dim):
             if layer_num == 0:
@@ -32,7 +32,8 @@ def bidirectional_encoder(src, src_length,
             src,
             src_length,
             fw_zero_state,
-            bw_zero_state
+            bw_zero_state,
+            swap_memory=swap_memory
         )
 
         output = tf.concat(outputs, axis=2)
@@ -43,9 +44,9 @@ def bidirectional_encoder(src, src_length,
 
 def source_sent_encoder(src, src_length,
                         hidden_dim, num_layer,
-                        dropout_keep, use_dropout=False, reuse=None):
+                        dropout_keep, swap_memory=False, use_dropout=False, reuse=None):
     return bidirectional_encoder(
         src, src_length,
-        hidden_dim, num_layer,
-        dropout_keep, use_dropout, reuse, name=OPS_NAME
+        hidden_dim, num_layer, dropout_keep,
+        swap_memory, use_dropout, reuse, name=OPS_NAME
     )

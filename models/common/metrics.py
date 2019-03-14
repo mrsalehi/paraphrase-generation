@@ -1,5 +1,5 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 from models.common import vocab
 
@@ -68,6 +68,9 @@ def create_bleu_metric_ops(ref_tokens, predict_tokens, ref_len, pred_len):
 
 
 def join_tokens(tokens, tokens_lengths, separator=' '):
+    if tokens.shape.ndims > 2:
+        return join_tokens_beam(tokens, tokens_lengths, separator)
+
     token_str_len = tf.strings.length(tokens)
     mask = tf.sequence_mask(tokens_lengths, dtype=tf.int32)
     substr_len = tf.reduce_sum(mask * token_str_len, axis=1) + (tokens_lengths - 1) * len(separator)
@@ -78,3 +81,26 @@ def join_tokens(tokens, tokens_lengths, separator=' '):
     final_str = tf.reshape(final_str, [-1, 1])
 
     return final_str
+
+
+def join_tokens_beam(tokens, tokens_lengths, separator=' '):
+    tokens_lengths = tf.cast(tokens_lengths, tf.int32)
+
+    token_str_len = tf.strings.length(tokens)
+    mask = tf.sequence_mask(tokens_lengths, dtype=tf.int32, maxlen=tf.shape(tokens)[1])
+    mask = tf.transpose(mask, [0, 2, 1])
+
+    substr_len = tf.reduce_sum(mask * token_str_len, axis=1) + (tokens_lengths - 1) * len(separator)
+    joined = tf.reduce_join(tokens, axis=1, separator=separator)
+    final_str = tf.strings.substr(joined,
+                                  tf.zeros_like(tokens_lengths),
+                                  substr_len)
+
+    return final_str
+
+
+def join_beams(tokens, tokens_lengths, separator='\n'):
+    beams = join_tokens_beam(tokens, tokens_lengths)
+    joined = tf.reduce_join(beams, axis=1, separator=separator)
+    joined = tf.reshape(joined, [-1, 1])
+    return joined
