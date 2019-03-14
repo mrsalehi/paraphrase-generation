@@ -1,15 +1,13 @@
 import numpy as np
-
 import tensorflow as tf
 
-from models.common import vocab, sequence
 from models import neural_editor
-from models.neural_editor import encoder
+from models.common import vocab, sequence
+from models.neural_editor import agenda
 from models.neural_editor import decoder
 from models.neural_editor import edit_encoder
-from models.neural_editor import agenda
-
-from test.test_input_fn import embedding_file, dataset_file, dataset, EMBED_DIM, NUM_EPOCH, BATCH_SIZE
+from models.neural_editor import encoder
+from test.test_input_fn import EMBED_DIM, NUM_EPOCH, BATCH_SIZE
 
 EDIT_DIM = 3
 
@@ -108,16 +106,25 @@ def test_decoder_train(dataset_file, embedding_file):
 
         dec_out = decoder.train_decoder(
             agn, embedding,
-            tf.nn.embedding_lookup(embedding, dec_inputs),
+            dec_inputs,
             src_sent_embeds,
             tf.nn.embedding_lookup(embedding, inw),
             tf.nn.embedding_lookup(embedding, dlw),
-            dec_inputs_len, src_len, sequence.length_pre_embedding(inw),
-            sequence.length_pre_embedding(dlw),
+            dec_inputs_len, src_len, sequence.length_pre_embedding(inw), sequence.length_pre_embedding(dlw),
             5, 20, 3, False
         )
 
-        eval_dec_out = decoder.greedy_eval_decoder(
+        # eval_dec_out = decoder.greedy_eval_decoder(
+        #     agn, embedding,
+        #     start_token_id, stop_token_id,
+        #     src_sent_embeds,
+        #     tf.nn.embedding_lookup(embedding, inw),
+        #     tf.nn.embedding_lookup(embedding, dlw),
+        #     src_len, sequence.length_pre_embedding(inw), sequence.length_pre_embedding(dlw),
+        #     5, 20, 3, 40
+        # )
+
+        eval_dec_out = decoder.beam_eval_decoder(
             agn, embedding,
             start_token_id, stop_token_id,
             src_sent_embeds,
@@ -140,19 +147,21 @@ def test_decoder_train(dataset_file, embedding_file):
             sess.run([tf.global_variables_initializer(), tf.local_variables_initializer(), tf.tables_initializer()])
             sess.run(iter.initializer)
 
+            print(sess.run([eval_dec_out]))
+
             # (src_embd, src_len, tgt, inw, dlw) = sess.run((src_sent_embeds, src_len,tgt, inw, dlw))
 
             # o = sess.run([an, stacked, len])
-            t = sess.run(tgt)
-            tl = sess.run(tgt_len)
-            do = sess.run(dec_outputs)
-            di = sess.run(dec_inputs)
-            dol = sess.run(dec_outputs_len)
-            dil = sess.run(dec_inputs_len)
-            tgt_len = sess.run(tgt_len)
+            # t = sess.run(tgt)
+            # tl = sess.run(tgt_len)
+            # do = sess.run(dec_outputs)
+            # di = sess.run(dec_inputs)
+            # dol = sess.run(dec_outputs_len)
+            # dil = sess.run(dec_inputs_len)
+            # tgt_len = sess.run(tgt_len)
 
-            assert list(dil) == list(dol) == list(tgt_len + 1)
-            assert list(di[:, 0]) == list(np.ones_like(di[:, 0]) * start_token_id)
+            # assert list(dil) == list(dol) == list(tgt_len + 1)
+            # assert list(di[:, 0]) == list(np.ones_like(di[:, 0]) * start_token_id)
             # print(o[1][0].shape)
 
             # save_path = saver.save(sess, "data/an/model")
@@ -169,6 +178,3 @@ def test_decoder_train(dataset_file, embedding_file):
             #         print(e)
             #         pass
             # o2 = sess.run(eval_dec_out)
-
-            for i in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
-                print(i)
