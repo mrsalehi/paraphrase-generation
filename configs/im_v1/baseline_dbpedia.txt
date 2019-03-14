@@ -1,9 +1,9 @@
-include "../optim/default.txt"
-include "../eval/short.txt"
+include "optim/default.txt"
+include "eval/short.txt"
 
 seed = 0
 
-model_dir = im_v1_rcv1
+model_dir = im_v1_dbpedia
 
 editor {
     vocab_size = 10000  # a proper size would be >20000
@@ -15,6 +15,7 @@ editor {
     max_sent_length = 40
     encoder_layers = 3
     decoder_layers = 3
+    beam_width = 5
     no_insert_delete_attn = False
     dropout_keep = 0.8
     ident_pr = 0.1
@@ -27,7 +28,7 @@ editor {
     draw_edit = False
     use_swap_memory = True
     embed_sentence = False
-    wvec_path = glove.6B.300d_rcv1.txt
+    wvec_path = glove.6B.300d_dbpedia.txt
 
     edit_enc {
         ctx_hidden_dim = 256
@@ -39,7 +40,7 @@ editor {
 
 dataset {
     # this path should be relative to $SQUAD_ENTAILMENT_DATA
-    path = rcv1_split
+    path = dbpedia_split
     use_diff = True
 }
 

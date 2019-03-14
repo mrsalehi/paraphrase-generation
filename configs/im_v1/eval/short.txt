@@ -1,7 +1,7 @@
 eval {
     num_examples = 32  # number of examples to periodically evaluate on
     big_num_examples = 512
-    eval_steps = 500
+    eval_steps = 100
     big_eval_steps = 5000
     save_steps = 500
     alive_steps = 30
