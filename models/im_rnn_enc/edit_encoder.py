@@ -1,90 +1,17 @@
-import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.rnn as tf_rnn
 import tensorflow_probability as tfp
 
 tfd = tfp.distributions
 
+from models.neural_editor.edit_encoder import sample_vMF
+
 import models.common.sequence as sequence
 
 OPS_NAME = 'edit_encoder'
 
 
-def sample_vMF(m, kappa, norm_eps, norm_max):
-    batch_size = tf.shape(m)[0]
-    id_dim = m.shape[1]
-
-    munorm = tf.norm(m, axis=1, keepdims=True)
-    munorm = tf.tile(munorm, [1, id_dim])
-    munoise = add_norm_noise(munorm, norm_eps, norm_max, batch_size)
-
-    w = sample_weight_tf(kappa, id_dim, batch_size)
-    wtorch = w * tf.ones((batch_size, id_dim))
-
-    v = sample_orthonormal_to(m / munorm, id_dim, batch_size)
-    scale_factr = tf.sqrt(tf.ones((batch_size, id_dim)) - tf.pow(wtorch, 2))
-    orth_term = v * scale_factr
-    muscale = m * wtorch / munorm
-    sampled_vec = (orth_term + muscale) * munoise
-
-    return sampled_vec
-
-
-def sample_orthonormal_to(mu, dim, batch_size):
-    v = tf.random_normal(shape=(batch_size, dim))
-    rescale_value = tf.reshape(tf.reduce_sum(mu * v, axis=1), [-1, 1])
-    rescale_value = rescale_value / tf.norm(mu, axis=1, keepdims=True)
-    proj_mu_v = mu * tf.tile(rescale_value, [1, dim])
-    ortho = v - proj_mu_v
-    ortho_norm = tf.norm(ortho, axis=1, keepdims=True)
-    return ortho / tf.tile(ortho_norm, [1, dim])
-
-
-def sample_weight_tf(kappa, dim, batch_size):
-    dim = int(dim) - 1
-    b = dim / (np.sqrt(4. * kappa ** 2 + dim ** 2) + 2 * kappa)  # b= 1/(sqrt(4.* kdiv**2 + 1) + 2 * kdiv)
-    x = (1. - b) / (1. + b)
-    c = kappa * x + dim * np.log(1 - x ** 2)  # dim * (kdiv *x + np.log(1-x**2))
-
-    b_dist = tfd.Beta(dim / 2., dim / 2.)
-
-    z = b_dist.sample([batch_size, 1])
-    w = (1. - (1. + b) * z) / (1. - (1. - b) * z)
-    u = tf.random_uniform(shape=(batch_size, 1), minval=0, maxval=1)
-
-    def cond(w, u):
-        all_cond = kappa * w + dim * tf.log(1. - x * w) - c < tf.log(u)
-        return tf.reduce_all(all_cond)
-
-    def body(w, u):
-        z = b_dist.sample([batch_size, 1])
-        w = (1. - (1. + b) * z) / (1. - (1. - b) * z)
-        u = tf.random_uniform(shape=(batch_size, 1), minval=0, maxval=1)
-        return (w, u)
-
-    w, u = tf.while_loop(
-        cond, body,
-        loop_vars=(w, u),
-        back_prop=False,
-    )
-
-    return w
-
-
-def add_norm_noise(norm, eps, norm_max, batch_size):
-    trand = tf.random_uniform((batch_size, 1), maxval=1, dtype=tf.float32)
-    trand = tf.tile(trand, [1, norm.shape[1]])
-    trand = trand * eps
-    return hardtanh(norm, 0, norm_max - eps) + trand
-
-
-def hardtanh(x, min_val, max_val):
-    lower = tf.maximum(x, min_val)
-    upper = tf.minimum(lower, max_val)
-    return upper
-
-
-def word_aggregator(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
+def word_aggregator(words, lengths, hidden_dim, num_layers, swap_memory=False, name=None, reuse=None):
     """
     Args:
         words: tensor in shape of [batch x max_len x embed_dim]
@@ -115,13 +42,14 @@ def word_aggregator(words, lengths, hidden_dim, num_layers, name=None, reuse=Non
             cell,
             words,
             sequence_length=lengths,
-            initial_state=zero_state
+            initial_state=zero_state,
+            swap_memory=swap_memory
         )
 
         return outputs
 
 
-def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=None):
+def context_encoder(words, lengths, hidden_dim, num_layers, swap_memory=False, name=None, reuse=None):
     """
     Args:
         words: tensor in shape of [batch x max_len x embed_dim]
@@ -157,7 +85,8 @@ def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=Non
             words,
             lengths,
             fw_zero_state,
-            bw_zero_state
+            bw_zero_state,
+            swap_memory=swap_memory
         )
 
         output = tf.concat(outputs, axis=2)
@@ -169,7 +98,7 @@ def context_encoder(words, lengths, hidden_dim, num_layers, name=None, reuse=Non
 def rnn_encoder(source_words, target_words, insert_words, delete_words,
                 source_lengths, target_lengths, iw_lengths, dw_lengths,
                 ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
-                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
+                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep, swap_memory=False):
     """
     Args:
         source_words:
@@ -196,7 +125,8 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
     with tf.variable_scope(OPS_NAME):
         cnx_encoder = tf.make_template('cnx_encoder', context_encoder,
                                        hidden_dim=ctx_hidden_dim,
-                                       num_layers=ctx_hidden_layer)
+                                       num_layers=ctx_hidden_layer,
+                                       swap_memory=swap_memory)
 
         cnx_src = cnx_encoder(source_words, source_lengths)
         cnx_tgt = cnx_encoder(target_words, target_lengths)
@@ -209,7 +139,8 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
 
         wa = tf.make_template('wa', word_aggregator,
                               hidden_dim=wa_hidden_dim,
-                              num_layers=wa_hidden_layer)
+                              num_layers=wa_hidden_layer,
+                              swap_memory=swap_memory)
 
         wa_inserted = wa(insert_words, iw_lengths)
         wa_deleted = wa(delete_words, dw_lengths)
@@ -232,36 +163,3 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
         noised_edit_vector = sample_vMF(edit_vector, noise_scaler, norm_eps, norm_max)
 
         return noised_edit_vector
-
-
-def accumulator_encoder(insert_words, delete_words,
-                        iw_lengths, dw_lengths,
-                        edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
-    max_len = tf.shape(insert_words)[1]
-    mask = tf.sequence_mask(iw_lengths, maxlen=max_len, dtype=tf.float32)
-    mask = tf.expand_dims(mask, 2)
-    insert_embed = tf.reduce_sum(mask * insert_words, axis=1)
-
-    max_len = tf.shape(delete_words)[1]
-    mask = tf.sequence_mask(dw_lengths, maxlen=max_len, dtype=tf.float32)
-    mask = tf.expand_dims(mask, 2)
-    delete_embed = tf.reduce_sum(mask * delete_words, axis=1)
-
-    linear_prenoise = tf.make_template('linear_prenoise', tf.layers.dense,
-                                       units=edit_dim / 2,
-                                       activation=None,
-                                       use_bias=False)
-    insert_embed = linear_prenoise(insert_embed)
-    delete_embed = linear_prenoise(delete_embed)
-
-    combined = tf.concat([insert_embed, delete_embed], axis=1)
-    combined = sample_vMF(combined, noise_scaler, norm_eps, norm_max)
-
-    return combined
-
-
-def random_noise_encoder(batch_size, edit_dim, norm_max):
-    rand_draw = tf.random_normal(shape=(batch_size, edit_dim))
-    rand_draw = rand_draw / tf.norm(rand_draw, axis=1, keepdims=True)
-    rand_norms = tf.random_normal(shape=(batch_size, 1)) * norm_max
-    return rand_draw * rand_norms

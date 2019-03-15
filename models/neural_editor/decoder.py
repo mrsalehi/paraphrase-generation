@@ -2,6 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.rnn as tf_rnn
 from tensorflow.contrib import seq2seq
 from tensorflow.contrib.framework import nest
+from tensorflow.contrib.seq2seq import FinalBeamSearchDecoderOutput
 
 from models.common import sequence
 
@@ -220,13 +221,12 @@ def train_decoder(agenda, embeddings,
         return outputs, state, length
 
 
-def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
-                 src_sent_embeds, insert_word_embeds, delete_word_embeds,
-                 src_lengths, iw_length, dw_length,
-                 attn_dim, hidden_dim, num_layer, beam_width):
+def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
+                      src_sent_embeds, insert_word_embeds, delete_word_embeds,
+                      src_lengths, iw_length, dw_length,
+                      attn_dim, hidden_dim, num_layer, maximum_iterations, beam_width, swap_memory):
     with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
         true_batch_size = tf.shape(src_sent_embeds)[0]
-        batch_size = true_batch_size * beam_width
 
         tiled_agenda = seq2seq.tile_batch(agenda, beam_width)
 
@@ -254,7 +254,7 @@ def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
         decoder = seq2seq.BeamSearchDecoder(
             cell,
             embeddings,
-            tf.fill([batch_size], start_token_id),
+            tf.fill([true_batch_size], start_token_id),
             stop_token_id,
             zero_states,
             beam_width=beam_width,
@@ -262,9 +262,7 @@ def eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
             length_penalty_weight=0.0
         )
 
-        outputs, _, _ = seq2seq.dynamic_decode(decoder, maximum_iterations=40)
-
-        return outputs
+        return seq2seq.dynamic_decode(decoder, maximum_iterations=maximum_iterations, swap_memory=swap_memory)
 
 
 def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
@@ -328,9 +326,15 @@ def rnn_output(decoder_output):
 
 
 def sample_id(decoder_output):
-    output = decoder_output[0].sample_id
+    if isinstance(decoder_output[0], FinalBeamSearchDecoderOutput):
+        output = decoder_output[0].predicted_ids
+    else:
+        output = decoder_output[0].sample_id
     return output
 
 
 def seq_length(decoder_output):
+    if isinstance(decoder_output[0], FinalBeamSearchDecoderOutput):
+        return decoder_output[1].lengths
+
     return decoder_output[2]

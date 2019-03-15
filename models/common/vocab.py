@@ -19,6 +19,8 @@ SPECIAL_TOKENS = [
 OOV_TOKEN_ID = 1
 
 VOCAB_LOOKUP_COLL_NAME = 'vocab_lookup'
+EMBEDDING_MATRIX_COLL_NAME = 'embedding_matrix'
+
 STR_TO_INT = 'str_to_int'
 INT_TO_STR = 'int_to_str'
 
@@ -125,7 +127,10 @@ def get_vocab_lookup_tables():
     return vocab_lookup
 
 
-def get_token_id(token, vocab_table):
+def get_token_id(token, vocab_table=None):
+    if not vocab_table:
+        vocab_table = get_vocab_lookup_tables()[STR_TO_INT]
+
     token = tf.constant(bytes(token, encoding='utf8'), dtype=tf.string)
     token_id = vocab_table.lookup(token)
     return token_id
@@ -138,11 +143,15 @@ def init_embeddings(embed_matrix):
                                      initializer=tf.constant_initializer(embed_matrix),
                                      trainable=True)
 
+    graph_utils.add_dict_to_collection({'matrix': embeddings}, EMBEDDING_MATRIX_COLL_NAME)
+
     return embeddings
 
 
-def embed_tokens(ids):
-    with tf.variable_scope('embedding_lookup', reuse=True):
-        embeddings = tf.get_variable('embeddings')
+def get_embeddings():
+    return graph_utils.get_dict_from_collection(EMBEDDING_MATRIX_COLL_NAME)['matrix']
 
+
+def embed_tokens(ids):
+    embeddings = get_embeddings()
     return tf.nn.embedding_lookup(embeddings, ids)
