@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 import fire
@@ -7,7 +6,6 @@ from models import neural_editor
 from models.common import util
 from models.common.config import Config
 
-sys.executable
 
 class ModelRunner(object):
     model = neural_editor
