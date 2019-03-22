@@ -2,9 +2,10 @@ import itertools
 
 from tqdm import tqdm
 
-from models.common import vocab
+from models.common import vocab, util
 from models.common.util import read_tsv
 from models.neural_editor import convert_to_bytes, parse_instance, input_fn_from_gen_multi
+from models.neural_editor.edit_noiser import EditNoiser
 
 
 def read_plan(src_path):
@@ -21,13 +22,16 @@ def read_plan(src_path):
     return plans
 
 
-def create_formulas(plans):
+def create_formulas(plans, config):
+    noiser = EditNoiser.from_config(config)
+    free_set = util.get_free_words_set() if config.editor.use_free_set else None
+
     formulas = []
     formula2plan = []
     for i, (base, edits) in enumerate(plans):
         for j, edit_vector_pair in enumerate(edits):
             base_words = convert_to_bytes(base.split(' ')),
-            edit_instance = parse_instance(edit_vector_pair)
+            edit_instance = parse_instance(edit_vector_pair, noiser, free_set)
             formula = base_words + edit_instance
 
             formulas.append(formula)
@@ -36,9 +40,12 @@ def create_formulas(plans):
     return formulas, formula2plan
 
 
-def generate(estimator, plan_path, checkpoint_path, batch_size, beam_width, V):
+def generate(estimator, plan_path, checkpoint_path, config, V):
+    batch_size = config.optim.batch_size
+    beam_width = config.editor.beam_width
+
     plans = read_plan(plan_path)
-    formulas, formula2plan = create_formulas(plans)
+    formulas, formula2plan = create_formulas(plans, config)
 
     num_edit_vectors = int(len(formulas) / len(plans))
 

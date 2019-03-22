@@ -38,7 +38,8 @@ def prepare_decoder_input_output(tgt_words, tgt_len, vocab_table):
 def editor_train(base_words, source_words, target_words, insert_words, delete_words,
                  embed_matrix, vocab_table,
                  hidden_dim, agenda_dim, edit_dim, num_encoder_layers, num_decoder_layers, attn_dim, beam_width,
-                 max_sent_length, dropout_keep, lamb_reg, norm_eps, norm_max, kill_edit, draw_edit, swap_memory):
+                 max_sent_length, dropout_keep, lamb_reg, norm_eps, norm_max, kill_edit, draw_edit, swap_memory,
+                 use_beam_decoder=False):
     batch_size = tf.shape(source_words)[0]
 
     # [batch]
@@ -91,16 +92,21 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                                           train_dec_inp_len, src_len, iw_len, dw_len,
                                           attn_dim, hidden_dim, num_decoder_layers, swap_memory)
 
-    infr_decoder = decoder.beam_eval_decoder(input_agenda, embeddings,
-                                             vocab.get_token_id(vocab.START_TOKEN, vocab_table),
-                                             vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
-                                             base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
-                                             src_len, iw_len, dw_len,
-                                             attn_dim, hidden_dim, num_decoder_layers, max_sent_length, beam_width,
-                                             swap_memory)
+    if use_beam_decoder:
+        infr_decoder = decoder.beam_eval_decoder(input_agenda, embeddings,
+                                                 vocab.get_token_id(vocab.START_TOKEN, vocab_table),
+                                                 vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
+                                                 base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
+                                                 src_len, iw_len, dw_len,
+                                                 attn_dim, hidden_dim, num_decoder_layers, max_sent_length, beam_width,
+                                                 swap_memory)
+    else:
+        infr_decoder = decoder.greedy_eval_decoder(input_agenda, embeddings,
+                                                   vocab.get_token_id(vocab.START_TOKEN, vocab_table),
+                                                   vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
+                                                   base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
+                                                   src_len, iw_len, dw_len,
+                                                   attn_dim, hidden_dim, num_decoder_layers, max_sent_length,
+                                                   swap_memory)
 
     return train_decoder, infr_decoder, train_dec_out, train_dec_out_len
-
-
-def editor_test():
-    pass

@@ -46,3 +46,12 @@ class EditNoiser:
             insert_exact, insert_approx = self.dropout_split(insert_words)
             delete_exact, delete_approx = self.dropout_split(delete_words)
             return (src_words, tgt_words, insert_approx, delete_approx)
+
+    @classmethod
+    def from_config(cls, config):
+        if config.get('config.editor.enable_noiser', False):
+            noiser = EditNoiser(config.editor.ident_pr, config.editor.attend_pr)
+        else:
+            noiser = None
+
+        return noiser

@@ -1,5 +1,8 @@
+import os
+
 import tensorflow as tf
 import tensorflow.contrib.metrics as tf_metrics
+from tensorflow.contrib.hooks import ProfilerHook
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -7,20 +10,32 @@ from models.common import vocab, metrics
 from models.common.sequence import length_pre_embedding
 from models.neural_editor import editor, optimizer, decoder
 
+ES_TRACE = 'trace'
+ES_BLEU = 'bleu'
 
-def get_train_extra_summary_writer(model_dir, save_steps):
+
+def get_train_extra_summary_writer(config):
     return tf.train.SummarySaverHook(
-        save_steps=save_steps,
-        output_dir=model_dir,
+        save_steps=config.eval.eval_steps,
+        output_dir=config.model_dir,
         summary_op=tf.summary.merge_all('extra')
     )
 
 
-def get_extra_summary_logger(pred_op, bleu_op, every_n_step):
-    tensors = {
-        'pred': pred_op,
-        'bleu': bleu_op
-    }
+def get_profiler_hook(config):
+    save_steps = config.get('logger.profile_steps', config.eval.eval_steps)
+    output_dir = os.path.join(config.model_dir, 'device_profiler')
+
+    return ProfilerHook(
+        save_steps=save_steps,
+        output_dir=output_dir,
+        show_dataflow=True,
+        show_memory=True
+    )
+
+
+def get_extra_summary_logger(ops, config):
+    formatters = {}
 
     def print_pred_summary(pred_result):
         output_str = ''
@@ -34,13 +49,17 @@ def get_extra_summary_logger(pred_op, bleu_op, every_n_step):
 
         return output_str
 
+    formatters[ES_TRACE] = print_pred_summary
+
     def print_bleu_score(bleu_result):
         return 'BLEU: %s' % bleu_result
 
+    formatters[ES_BLEU] = print_bleu_score
+
     return tf.train.LoggingTensorHook(
-        tensors=tensors,
-        every_n_iter=every_n_step,
-        formatter=lambda t: '\n'.join([print_pred_summary(t['pred']), print_bleu_score(t['bleu'])])
+        tensors=ops,
+        every_n_iter=config.eval.eval_steps,
+        formatter=lambda x: '\n'.join([formatters[name](t) for name, t in x.items()])
     )
 
 
@@ -75,7 +94,40 @@ def get_trace_summary(vocab_i2s,
     return tf.concat([src_joined, iw_joined, dw_joined, tgt_joined, pred_joined], axis=1)
 
 
-def add_extra_summary(vocab_i2s, decoder_output, src_words, tgt_words, inserted_words, deleted_words, collections=None):
+def add_extra_summary(config, vocab_i2s, decoder_output, src_words, tgt_words, inserted_words, deleted_words,
+                      collections=None):
+    ops = {}
+
+    if config.get('logger.enable_trace', False):
+        trace_summary = add_extra_summary_trace(vocab_i2s,
+                                                decoder_output,
+                                                src_words, tgt_words, inserted_words,
+                                                deleted_words, collections)
+        ops[ES_TRACE] = trace_summary
+
+    if config.get('logger.enable_bleu', True):
+        avg_bleu = add_extra_summary_avg_bleu(vocab_i2s, decoder_output, tgt_words, collections)
+        ops[ES_BLEU] = avg_bleu
+
+    return ops
+
+
+def add_extra_summary_trace(vocab_i2s, decoder_output, src_words, tgt_words, inserted_words, deleted_words,
+                            collections=None):
+    pred_tokens = decoder.str_tokens(decoder_output, vocab_i2s)
+    pred_len = decoder.seq_length(decoder_output)
+
+    tgt_tokens = vocab_i2s.lookup(tgt_words)
+    tgt_len = length_pre_embedding(tgt_words)
+
+    trace_summary = get_trace_summary(vocab_i2s, pred_tokens, tgt_tokens, src_words, inserted_words, deleted_words,
+                                      pred_len, tgt_len)
+    tf.summary.text('trace', trace_summary, collections)
+
+    return trace_summary
+
+
+def add_extra_summary_avg_bleu(vocab_i2s, decoder_output, tgt_words, collections=None):
     pred_tokens = decoder.str_tokens(decoder_output, vocab_i2s)
     pred_len = decoder.seq_length(decoder_output)
 
@@ -85,11 +137,7 @@ def add_extra_summary(vocab_i2s, decoder_output, src_words, tgt_words, inserted_
     avg_bleu = get_avg_bleu_smmary(tgt_tokens, pred_tokens, tgt_len, pred_len)
     tf.summary.scalar('bleu', avg_bleu, collections)
 
-    trace_summary = get_trace_summary(vocab_i2s, pred_tokens, tgt_tokens, src_words, inserted_words, deleted_words,
-                                      pred_len, tgt_len)
-    tf.summary.text('trace', trace_summary, collections)
-
-    return avg_bleu, trace_summary
+    return avg_bleu
 
 
 def model_fn(features, mode, config, embedding_matrix, vocab_tables):
@@ -112,7 +160,7 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         config.editor.beam_width,
         config.editor.max_sent_length, config.editor.dropout_keep, config.editor.lamb_reg,
         config.editor.norm_eps, config.editor.norm_max, config.editor.kill_edit,
-        config.editor.draw_edit, config.editor.use_swap_memory
+        config.editor.draw_edit, config.editor.use_swap_memory, config.get('editor.use_beam_decoder', False)
     )
 
     loss = optimizer.loss(train_decoder_output, gold_dec_out, gold_dec_out_len)
@@ -120,34 +168,34 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         tf.summary.scalar('grad_norm', gradients_norm)
-        avg_bleu, pred_summary = add_extra_summary(vocab_i2s, infer_decoder_output,
-                                                   src_words, tgt_words, inserted_words, deleted_words,
-                                                   ['extra'])
-
-        extra_summary_logger = get_extra_summary_logger(pred_summary, avg_bleu, config.eval.eval_steps)
-        extra_summary_writer = get_train_extra_summary_writer(config.model_dir, config.eval.eval_steps)
+        ops = add_extra_summary(config, vocab_i2s, train_decoder_output,
+                                src_words, tgt_words, inserted_words, deleted_words,
+                                ['extra'])
 
         return tf.estimator.EstimatorSpec(
             mode,
             train_op=train_op,
             loss=loss,
-            training_hooks=[extra_summary_writer, extra_summary_logger]
+            training_hooks=[
+                get_train_extra_summary_writer(config),
+                get_extra_summary_logger(ops, config),
+                get_profiler_hook(config)
+            ]
         )
 
     elif mode == tf.estimator.ModeKeys.EVAL:
-        avg_bleu, pred_summary = add_extra_summary(vocab_i2s, infer_decoder_output,
-                                                   src_words, tgt_words, inserted_words, deleted_words)
+        ops = add_extra_summary(config, vocab_i2s, train_decoder_output,
+                                src_words, tgt_words, inserted_words, deleted_words,
+                                ['extra'])
 
-        extra_summary_logger = get_extra_summary_logger(pred_summary, avg_bleu, 1)
         return tf.estimator.EstimatorSpec(
             mode,
             loss=loss,
-            evaluation_hooks=[extra_summary_logger],
-            eval_metric_ops={'bleu': tf_metrics.streaming_mean(avg_bleu)}
+            evaluation_hooks=[get_extra_summary_logger(ops, config)],
+            eval_metric_ops={'bleu': tf_metrics.streaming_mean(ops[ES_BLEU])}
         )
 
     elif mode == tf.estimator.ModeKeys.PREDICT:
-        # attn_scores = decoder.attention_score(infer_decoder_output)
         lengths = decoder.seq_length(infer_decoder_output)
         tokens = decoder.str_tokens(infer_decoder_output, vocab_i2s)
         preds = {
@@ -155,10 +203,8 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
             'sample_id': decoder.sample_id(infer_decoder_output),
             'lengths': lengths,
             'joined': metrics.join_tokens(tokens, lengths),
-            # 'attn_scores_0': attn_scores[0],
-            # 'attn_scores_1': attn_scores[1],
-            # 'attn_scores_2': attn_scores[2],
         }
+
         return tf.estimator.EstimatorSpec(
             mode,
             predictions=preds

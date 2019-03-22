@@ -268,7 +268,7 @@ def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
 def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
                         src_sent_embeds, insert_word_embeds, delete_word_embeds,
                         src_lengths, iw_length, dw_length,
-                        attn_dim, hidden_dim, num_layer, max_sentence_length):
+                        attn_dim, hidden_dim, num_layer, max_sentence_length, swap_memory):
     with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
         batch_size = tf.shape(src_sent_embeds)[0]
 
@@ -296,7 +296,8 @@ def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
             output_layer
         )
 
-        outputs, state, lengths = seq2seq.dynamic_decode(decoder, maximum_iterations=max_sentence_length)
+        outputs, state, lengths = seq2seq.dynamic_decode(decoder, maximum_iterations=max_sentence_length,
+                                                         swap_memory=swap_memory)
 
         return outputs, state, lengths
 
