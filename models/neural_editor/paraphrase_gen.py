@@ -41,11 +41,8 @@ def read_plan(src_path):
 def create_formulas(plans):
     formulas = []
     formula2plan = []
-    for i in range(len(plans)):
-        p = plans[i]
-        base = p[0]
-
-        for j, edit_vector_pair in enumerate(p[1]):
+    for i, (base, edits) in enumerate(plans):
+        for j, edit_vector_pair in enumerate(edits):
             base_words = convert_to_bytes(base.split(' ')),
             edit_instance = parse_instance(edit_vector_pair)
             formula = base_words + edit_instance
