@@ -26,7 +26,7 @@ def parse_instance(instance, noiser=None, free=None):
     src_words = src.lower().split(' ')
     tgt_words = tgt.lower().split(' ')
 
-    if not free:
+    if free is None:
         free = set()
 
     insert_words = sorted(set(tgt_words) - set(src_words) - free)
