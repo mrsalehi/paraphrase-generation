@@ -1,3 +1,5 @@
+from models.neural_editor.edit_noiser import EditNoiser
+
 DATASET_CACHE = {}
 
 import random
@@ -15,7 +17,7 @@ def convert_to_bytes(lst):
     return [bytes(w, encoding='utf8') for w in lst]
 
 
-def parse_instance(instance):
+def parse_instance(instance, noiser=None):
     if isinstance(instance, str):
         instance = instance.split('\t')
 
@@ -26,6 +28,11 @@ def parse_instance(instance):
 
     insert_words = sorted(set(tgt_words) - set(src_words))
     delete_words = sorted(set(src_words) - set(tgt_words))
+
+    if noiser:
+        src_words, tgt_words, insert_words, delete_words = noiser(
+            (src_words, tgt_words, insert_words, delete_words)
+        )
 
     if len(insert_words) == 0:
         insert_words.append(vocab.UNKNOWN_TOKEN)
@@ -39,7 +46,7 @@ def parse_instance(instance):
            convert_to_bytes(delete_words)
 
 
-def read_examples_from_file(file_path, num_samples=None, seed=0):
+def read_examples_from_file(file_path, num_samples=None, seed=0, noiser=None):
     if not isinstance(file_path, str):
         file_path = str(file_path)
 
@@ -50,7 +57,7 @@ def read_examples_from_file(file_path, num_samples=None, seed=0):
         print('Reading examples from %s...' % file_path)
         with open(file_path, encoding='utf8') as f:
             lines = map(lambda x: x[:-1], f)
-            examples = map(parse_instance, lines)
+            examples = map(lambda x: parse_instance(x, noiser), lines)
             examples = list(tqdm(examples, total=util.get_num_total_lines(file_path)))
 
         DATASET_CACHE[file_path] = examples
@@ -177,14 +184,14 @@ def input_fn_from_gen_multi(gen, vocab_table, batch_size):
     return dataset
 
 
-def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=None, seed=0):
+def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=None, seed=0, noiser=None):
     if isinstance(vocab_table, dict):
         vocab_table = vocab_table[vocab.STR_TO_INT]
 
     pad_token = tf.constant(bytes(PAD_TOKEN, encoding='utf8'), dtype=tf.string)
     pad_value = vocab_table.lookup(pad_token)
 
-    base_dataset = read_examples_from_file(file_path, num_examples, seed)
+    base_dataset = read_examples_from_file(file_path, num_examples, seed, noiser)
 
     dataset_splits = []
     for index in range(len(base_dataset[0])):
@@ -215,12 +222,17 @@ def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=N
 
 
 def train_input_fn(config, data_dir, vocab_table):
+    noiser = None
+    if config.get('config.editor.enable_noiser', False):
+        noiser = EditNoiser(config.editor.ident_pr, config.editor.attend_pr)
+
     return input_fn(
         data_dir / config.dataset.path / 'train.tsv',
         vocab_table,
         config.optim.batch_size,
         config.optim.num_epoch,
-        config.seed
+        config.seed,
+        noiser=noiser
     )
 
 
@@ -228,12 +240,17 @@ def eval_input_fn(config, data_dir, vocab_table, file_name='valid.tsv', num_exam
     if not num_examples:
         num_examples = config.eval.num_examples
 
+    noiser = None
+    if config.get('config.editor.enable_noiser', False):
+        noiser = EditNoiser(config.editor.ident_pr, config.editor.attend_pr)
+
     return input_fn(
         data_dir / config.dataset.path / file_name,
         vocab_table,
         config.optim.batch_size,
         num_examples=num_examples,
-        seed=config.seed
+        seed=config.seed,
+        noiser=noiser
     )
 
 
