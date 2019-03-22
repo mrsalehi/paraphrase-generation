@@ -62,8 +62,9 @@ def generate(estimator, plan_path, checkpoint_path, batch_size, beam_width, V):
 
     num_edit_vectors = int(len(formulas) / len(plans))
 
+    formula_gen = lambda: iter(formulas)
     output = estimator.predict(
-        input_fn=lambda: input_fn_from_gen_multi(iter(formulas), vocab.create_vocab_lookup_tables(V), batch_size),
+        input_fn=lambda: input_fn_from_gen_multi(formula_gen, vocab.create_vocab_lookup_tables(V), batch_size),
         checkpoint_path=checkpoint_path
     )
 
