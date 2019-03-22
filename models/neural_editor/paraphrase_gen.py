@@ -7,23 +7,6 @@ from models.common.util import read_tsv
 from models.neural_editor import convert_to_bytes, parse_instance, input_fn_from_gen_multi
 
 
-class EditVectorPair:
-    def __init__(self, src, tgt, paraphrase=None):
-        self.src = src
-        self.tgt = tgt
-        self.paraphrase = paraphrase
-
-
-class Runner:
-    def __init__(self, exp_dir, checkpoint=None, output=None):
-        self.ckpt_num = checkpoint
-        self.exp_dir = exp_dir
-        self.output = output
-
-    def generate(self, src):
-        pass
-
-
 def read_plan(src_path):
     rows = read_tsv(src_path)
     plans = []
