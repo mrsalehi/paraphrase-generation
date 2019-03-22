@@ -343,7 +343,7 @@ def generate_paraphrase(config, data_dir, checkpoint_path, plan_path, output_pat
         batch_size = config.optim.batch_size
 
     if beam_width:
-        config.put('editor.beam_size', beam_width)
+        config.put('editor.beam_width', beam_width)
     else:
         beam_width = config.editor.beam_width
 
