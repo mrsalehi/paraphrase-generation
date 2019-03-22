@@ -15,11 +15,14 @@ def convert_to_bytes(lst):
     return [bytes(w, encoding='utf8') for w in lst]
 
 
-def parse_instance(instance_str):
-    src, tgt = instance_str.split('\t')
+def parse_instance(instance):
+    if isinstance(instance, str):
+        instance = instance.split('\t')
 
-    src_words = [w.lower() for w in src.split(' ')]
-    tgt_words = [w.lower() for w in tgt.split(' ')]
+    src, tgt = instance
+
+    src_words = src.lower().split(' ')
+    tgt_words = tgt.lower().split(' ')
 
     insert_words = sorted(set(tgt_words) - set(src_words))
     delete_words = sorted(set(src_words) - set(tgt_words))

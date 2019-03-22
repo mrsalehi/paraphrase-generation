@@ -22,3 +22,6 @@ def augment_meta_test(*args):
 
 def augment_debug(*args):
     return base.augment_debug(*args, my_model_fn=model_fn)
+
+def generate_paraphrase(*args):
+    return base.generate_paraphrase(*args, my_model_fn=model_fn)

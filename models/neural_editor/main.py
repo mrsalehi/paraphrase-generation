@@ -43,6 +43,15 @@ class ModelRunner(object):
     def debug(self, debug_dataset):
         self.model.augment_debug(self._config, debug_dataset, self._data_dir, self._checkpoint)
 
+    def gen_paraphrase(self, plan, output, batch_size=None, beam_width=None):
+        self.model.generate_paraphrase(
+            self._config,
+            self._data_dir,
+            self._checkpoint,
+            plan, output,
+            beam_width, batch_size
+        )
+
 
 if __name__ == '__main__':
     fire.Fire(ModelRunner)

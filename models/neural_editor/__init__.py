@@ -6,6 +6,7 @@ import tensorflow as tf
 from tensorflow.contrib.estimator import InMemoryEvaluatorHook
 from tqdm import tqdm
 
+from models.common.util import save_tsv
 from models.neural_editor.input import train_input_fn, eval_input_fn, input_fn_cmd, convert_to_bytes, parse_instance, \
     get_generator, input_fn_from_gen_multi
 from models.neural_editor.model import model_fn
@@ -13,7 +14,7 @@ from models.neural_editor.model import model_fn
 tf.logging.set_verbosity(tf.logging.INFO)
 
 from models.common import vocab, util
-from models.neural_editor import editor, optimizer, decoder
+from models.neural_editor import editor, optimizer, decoder, paraphrase_gen
 
 NAME = 'neural_editor'
 
@@ -326,3 +327,29 @@ def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None, my_mode
 
     with open("%s_debugged" % debug_dataset, 'w', encoding='utf8') as f:
         json.dump(debugged, f)
+
+
+def generate_paraphrase(config, data_dir, checkpoint_path, plan_path, output_path, beam_width, batch_size,
+                        my_model_fn=model_fn):
+    V, embed_matrix = vocab.read_word_embeddings(
+        data_dir / 'word_vectors' / config.editor.wvec_path,
+        config.editor.word_dim,
+        config.editor.vocab_size
+    )
+
+    if batch_size:
+        config.put('optim.batch_size', batch_size)
+    else:
+        batch_size = config.optim.batch_size
+
+    if beam_width:
+        config.put('editor.beam_size', beam_width)
+    else:
+        beam_width = config.editor.beam_width
+
+    estimator = get_estimator(config, embed_matrix, my_model_fn)
+
+    paras = paraphrase_gen.generate(estimator, plan_path, checkpoint_path, batch_size, beam_width, V)
+    flatten = paraphrase_gen.flatten(paras)
+
+    save_tsv(output_path, flatten)
