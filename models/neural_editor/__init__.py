@@ -76,12 +76,12 @@ def train(config, data_dir, my_model_fn=model_fn):
                                                 num_examples=config.eval.big_num_examples),
                           name='eval_big',
                           every_n_steps=config.eval.big_eval_steps),
-
-            get_eval_hook(estimator,
-                          lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
-                                                file_name='train.tsv', num_examples=config.eval.big_num_examples),
-                          name='train_big',
-                          every_n_steps=config.eval.big_eval_steps),
+            #
+            # get_eval_hook(estimator,
+            #               lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V),
+            #                                     file_name='train.tsv', num_examples=config.eval.big_num_examples),
+            #               name='train_big',
+            #               every_n_steps=config.eval.big_eval_steps),
         ]
     )
 
