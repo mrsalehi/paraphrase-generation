@@ -32,6 +32,7 @@ def save_tsv(filepath, rows):
     with open(filepath, 'w', encoding='utf8') as f:
         for cols in rows:
             f.write('\t'.join([str(c) for c in cols]))
+            f.write('\n')
 
 
 def get_free_words_set():

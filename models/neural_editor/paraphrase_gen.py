@@ -24,7 +24,7 @@ def read_plan(src_path):
 
 def create_formulas(plans, config):
     noiser = EditNoiser.from_config(config)
-    free_set = util.get_free_words_set() if config.editor.use_free_set else None
+    free_set = util.get_free_words_set() if config.get('editor.use_free_set', False) else None
 
     formulas = []
     formula2plan = []
@@ -40,9 +40,16 @@ def create_formulas(plans, config):
     return formulas, formula2plan
 
 
+def clean_sentence(sent):
+    return sent.replace('<stop>', '').strip()
+
+
 def generate(estimator, plan_path, checkpoint_path, config, V):
     batch_size = config.optim.batch_size
-    beam_width = config.editor.beam_width
+    if config.get('editor.use_beam_decoder', False):
+        beam_width = config.editor.beam_width
+    else:
+        beam_width = 1
 
     plans = read_plan(plan_path)
     formulas, formula2plan = create_formulas(plans, config)
@@ -55,10 +62,10 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
         checkpoint_path=checkpoint_path
     )
 
-    plan2paraphrase = [[None] * num_edit_vectors] * len(plans)
+    plan2paraphrase = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
-        paraphrases = [j.decode('utf8') for j in o['joined']]
+        paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
         assert len(paraphrases) == beam_width
 
         plan_index, edit_index = formula2plan[i]

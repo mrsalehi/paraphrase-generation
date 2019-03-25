@@ -25,6 +25,9 @@ class ModelRunner(object):
 
     def _put_epoch_num(self):
         p = self._data_dir / self._config.dataset.path / 'train.tsv'
+        if not p.exists():
+            return
+
         total_num_examples = util.get_num_total_lines(p)
         num_batch_per_epoch = total_num_examples // self._config.optim.batch_size
         num_epoch = self._config.optim.max_iters // num_batch_per_epoch + 1

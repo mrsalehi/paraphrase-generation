@@ -339,17 +339,13 @@ def generate_paraphrase(config, data_dir, checkpoint_path, plan_path, output_pat
 
     if batch_size:
         config.put('optim.batch_size', batch_size)
-    else:
-        batch_size = config.optim.batch_size
 
     if beam_width:
         config.put('editor.beam_width', beam_width)
-    else:
-        beam_width = config.editor.beam_width
 
     estimator = get_estimator(config, embed_matrix, my_model_fn)
 
-    paras = paraphrase_gen.generate(estimator, plan_path, checkpoint_path, batch_size, beam_width, V)
+    paras = paraphrase_gen.generate(estimator, plan_path, checkpoint_path, config, V)
     flatten = paraphrase_gen.flatten(paras)
 
     save_tsv(output_path, flatten)
