@@ -98,7 +98,7 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
 def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word_embeds,
                         src_lengths, iw_length, dw_length,
                         attn_dim, hidden_dim, num_layer,
-                        enable_alignment_history=True, enable_dropout=False, dropout_keep=0.1):
+                        enable_alignment_history=False, enable_dropout=False, dropout_keep=0.1):
     src_attn = seq2seq.BahdanauAttention(attn_dim, src_sent_embeds, src_lengths, name='src_attn')
     insert_attn = seq2seq.BahdanauAttention(attn_dim, insert_word_embeds, iw_length, name='insert_attn')
     delete_attn = seq2seq.BahdanauAttention(attn_dim, delete_word_embeds, dw_length, name='delete_attn')
