@@ -97,7 +97,8 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
 
 def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word_embeds,
                         src_lengths, iw_length, dw_length,
-                        attn_dim, hidden_dim, num_layer, enable_alignment_history=True):
+                        attn_dim, hidden_dim, num_layer,
+                        enable_alignment_history=True, enable_dropout=False, dropout_keep=0.1):
     src_attn = seq2seq.BahdanauAttention(attn_dim, src_sent_embeds, src_lengths, name='src_attn')
     insert_attn = seq2seq.BahdanauAttention(attn_dim, insert_word_embeds, iw_length, name='insert_attn')
     delete_attn = seq2seq.BahdanauAttention(attn_dim, delete_word_embeds, dw_length, name='delete_attn')
@@ -115,7 +116,11 @@ def create_decoder_cell(agenda, src_sent_embeds, insert_word_embeds, delete_word
 
     num_layer -= 1
     for i in range(num_layer):
-        all_cells.append(tf_rnn.LSTMCell(hidden_dim, name='layer_%s' % (i + 1)))
+        cell = tf_rnn.LSTMCell(hidden_dim, name='layer_%s' % (i + 1))
+        if enable_dropout and dropout_keep < 1.:
+            cell = tf_rnn.DropoutWrapper(cell, output_keep_prob=dropout_keep)
+
+        all_cells.append(cell)
 
     decoder_cell = AttentionAugmentRNNCell(all_cells)
     decoder_cell.set_agenda(agenda)
@@ -197,7 +202,7 @@ class DecoderOutputLayer(tf.layers.Layer):
 def train_decoder(agenda, embeddings,
                   dec_inputs, src_sent_embeds, insert_word_embeds, delete_word_embeds,
                   dec_input_lengths, src_lengths, iw_length, dw_length,
-                  attn_dim, hidden_dim, num_layer, swap_memory):
+                  attn_dim, hidden_dim, num_layer, swap_memory, enable_dropout=False, dropout_keep=1.):
     with tf.variable_scope(OPS_NAME, 'decoder', []):
         batch_size = tf.shape(src_sent_embeds)[0]
 
@@ -208,7 +213,8 @@ def train_decoder(agenda, embeddings,
             agenda,
             src_sent_embeds, insert_word_embeds, delete_word_embeds,
             src_lengths, iw_length, dw_length,
-            attn_dim, hidden_dim, num_layer
+            attn_dim, hidden_dim, num_layer,
+            enable_dropout=enable_dropout, dropout_keep=dropout_keep
         )
 
         output_layer = DecoderOutputLayer(embeddings)
@@ -224,7 +230,8 @@ def train_decoder(agenda, embeddings,
 def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
                       src_sent_embeds, insert_word_embeds, delete_word_embeds,
                       src_lengths, iw_length, dw_length,
-                      attn_dim, hidden_dim, num_layer, maximum_iterations, beam_width, swap_memory):
+                      attn_dim, hidden_dim, num_layer, maximum_iterations, beam_width, swap_memory,
+                      enable_dropout=False, dropout_keep=1.):
     with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
         true_batch_size = tf.shape(src_sent_embeds)[0]
 
@@ -245,7 +252,8 @@ def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
             tiled_agenda,
             tiled_src_sent, tiled_insert_embeds, tiled_delete_embeds,
             tiled_src_lengths, tiled_iw_lengths, tiled_dw_lengths,
-            attn_dim, hidden_dim, num_layer
+            attn_dim, hidden_dim, num_layer,
+            enable_dropout=enable_dropout, dropout_keep=dropout_keep
         )
 
         output_layer = DecoderOutputLayer(embeddings, beam_decoder=True)
@@ -268,7 +276,8 @@ def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
 def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
                         src_sent_embeds, insert_word_embeds, delete_word_embeds,
                         src_lengths, iw_length, dw_length,
-                        attn_dim, hidden_dim, num_layer, max_sentence_length, swap_memory):
+                        attn_dim, hidden_dim, num_layer, max_sentence_length, swap_memory,
+                        enable_dropout=False, dropout_keep=1.):
     with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
         batch_size = tf.shape(src_sent_embeds)[0]
 
@@ -283,7 +292,8 @@ def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
             agenda,
             src_sent_embeds, insert_word_embeds, delete_word_embeds,
             src_lengths, iw_length, dw_length,
-            attn_dim, hidden_dim, num_layer
+            attn_dim, hidden_dim, num_layer,
+            enable_dropout=enable_dropout, dropout_keep=dropout_keep
         )
 
         output_layer = DecoderOutputLayer(embeddings)
