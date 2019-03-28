@@ -14,7 +14,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                  hidden_dim, agenda_dim, edit_dim, num_encoder_layers, num_decoder_layers, attn_dim, beam_width,
                  ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
                  max_sent_length, dropout_keep, lamb_reg, norm_eps, norm_max, kill_edit, draw_edit, swap_memory,
-                 use_beam_decoder):
+                 use_beam_decoder=False, use_dropout=False):
     batch_size = tf.shape(source_words)[0]
 
     # [batch]
@@ -38,7 +38,8 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
     base_sent_hidden_states, base_sent_embed = encoder.source_sent_encoder(
         base_word_embeds,
         base_len,
-        hidden_dim, num_encoder_layers, dropout_keep, swap_memory=swap_memory
+        hidden_dim, num_encoder_layers,
+        use_dropout=use_dropout, dropout_keep=dropout_keep, swap_memory=swap_memory
     )
 
     # [batch x edit_dim]
@@ -54,8 +55,8 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                 src_len, tgt_len,
                 iw_len, dw_len,
                 ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
-                edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep,
-                swap_memory
+                edit_dim, lamb_reg, norm_eps, norm_max,
+                use_dropout=use_dropout, dropout_keep=dropout_keep, swap_memory=swap_memory
             )
 
     # [batch x agenda_dim]
@@ -67,7 +68,8 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
     train_decoder = decoder.train_decoder(input_agenda, embeddings, train_dec_inp,
                                           base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
                                           train_dec_inp_len, src_len, iw_len, dw_len,
-                                          attn_dim, hidden_dim, num_decoder_layers, swap_memory)
+                                          attn_dim, hidden_dim, num_decoder_layers, swap_memory,
+                                          enable_dropout=use_dropout, dropout_keep=dropout_keep)
 
     if use_beam_decoder:
         infr_decoder = decoder.beam_eval_decoder(input_agenda, embeddings,
@@ -76,7 +78,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                                                  base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
                                                  src_len, iw_len, dw_len,
                                                  attn_dim, hidden_dim, num_decoder_layers, max_sent_length, beam_width,
-                                                 swap_memory)
+                                                 swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep)
     else:
         infr_decoder = decoder.greedy_eval_decoder(input_agenda, embeddings,
                                                    vocab.get_token_id(vocab.START_TOKEN),
@@ -84,7 +86,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                                                    base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
                                                    src_len, iw_len, dw_len,
                                                    attn_dim, hidden_dim, num_decoder_layers, max_sent_length,
-                                                   swap_memory)
+                                                   swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep)
 
     return train_decoder, infr_decoder, train_dec_out, train_dec_out_len
 

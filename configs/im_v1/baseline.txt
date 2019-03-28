@@ -18,6 +18,7 @@ editor {
     beam_width = 5
     no_insert_delete_attn = False
     dropout_keep = 0.8
+    enable_dropout = False
     ident_pr = 0.1
     attend_pr = 0.0
     enable_vae = True
@@ -30,12 +31,22 @@ editor {
     embed_sentence = False
     wvec_path = glove.6B.300d_yelp.txt
 
+    use_beam_decoder = False
+    enable_noiser = False
+    use_free_set = False
+
     edit_enc {
         ctx_hidden_dim = 256
         ctx_hidden_layer = 3
         wa_hidden_dim = 128
         wa_hidden_layer = 1
     }
+}
+
+logger {
+    profile_steps = 100
+    enable_trace = False
+    enable_bleu = True
 }
 
 dataset {

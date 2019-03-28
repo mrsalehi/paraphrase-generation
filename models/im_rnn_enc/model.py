@@ -20,6 +20,10 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         src_words, tgt_words, inserted_words, deleted_words = features
         base_words = src_words
 
+    if mode != tf.estimator.ModeKeys.TRAIN:
+        config.put('editor.enable_dropout', False)
+        config.put('editor.dropout_keep', 1.0)
+
     vocab_i2s = vocab_tables[vocab.INT_TO_STR]
     vocab.init_embeddings(embedding_matrix)
 
@@ -33,7 +37,8 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         config.editor.edit_enc.wa_hidden_dim, config.editor.edit_enc.wa_hidden_layer,
         config.editor.max_sent_length, config.editor.dropout_keep, config.editor.lamb_reg,
         config.editor.norm_eps, config.editor.norm_max, config.editor.kill_edit,
-        config.editor.draw_edit, config.editor.use_swap_memory, config.get('editor.use_beam_decoder', False)
+        config.editor.draw_edit, config.editor.use_swap_memory,
+        config.get('editor.use_beam_decoder', False), config.get('editor.enable_dropout', False)
     )
 
     loss = optimizer.loss(train_decoder_output, gold_dec_out, gold_dec_out_len)

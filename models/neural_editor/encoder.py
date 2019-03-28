@@ -46,7 +46,7 @@ def bidirectional_encoder(src, src_length,
 
 def source_sent_encoder(src, src_length,
                         hidden_dim, num_layer,
-                        dropout_keep, swap_memory=False, use_dropout=False, reuse=None):
+                        dropout_keep=1.0, swap_memory=False, use_dropout=False, reuse=None):
     return bidirectional_encoder(
         src, src_length,
         hidden_dim, num_layer, dropout_keep,
