@@ -63,9 +63,8 @@ def train(config, data_dir, my_model_fn=model_fn):
 
     estimator = get_estimator(config, embed_matrix, my_model_fn)
 
-    return estimator.train(
-        input_fn=lambda: train_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
-        hooks=[
+    if config.get('eval.enable', True):
+        hooks = [
             get_eval_hook(estimator,
                           lambda: eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
                           name='eval',
@@ -83,6 +82,12 @@ def train(config, data_dir, my_model_fn=model_fn):
             #               name='train_big',
             #               every_n_steps=config.eval.big_eval_steps),
         ]
+    else:
+        hooks = []
+
+    return estimator.train(
+        input_fn=lambda: train_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
+        hooks=hooks
     )
 
 
