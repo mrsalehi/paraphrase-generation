@@ -218,7 +218,7 @@ def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=N
 
     dataset = tf.data.Dataset.zip(tuple(dataset_splits))
     if num_epochs:
-        dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(1000, num_epochs))
+        dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(500, num_epochs))
 
     fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
 
