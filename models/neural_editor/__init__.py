@@ -35,7 +35,7 @@ def get_estimator(config, embed_matrix, my_model_fn=model_fn):
         save_checkpoints_steps=config.eval.save_steps,
         save_summary_steps=config.eval.save_summary_steps,
         keep_checkpoint_max=config.eval.keep_checkpoint_max,
-        log_step_count_steps=1
+        log_step_count_steps=10,
     )
 
     estimator = tf.estimator.Estimator(
@@ -87,7 +87,8 @@ def train(config, data_dir, my_model_fn=model_fn):
 
     return estimator.train(
         input_fn=lambda: train_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
-        hooks=hooks
+        hooks=hooks,
+        max_steps=config.optim.max_iters
     )
 
 
