@@ -3,7 +3,11 @@ import pickle
 import random
 
 import tensorflow as tf
-from tensorflow.contrib.estimator import InMemoryEvaluatorHook
+try:
+    from tensorflow.contrib.estimator import InMemoryEvaluatorHook
+except:
+    from tensorflow.estimator.experimental import InMemoryEvaluatorHook
+
 from tqdm import tqdm
 
 from models.common.util import save_tsv
