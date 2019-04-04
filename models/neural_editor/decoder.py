@@ -96,16 +96,21 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
 
 
 def create_decoder_cell(agenda, base_sent_embeds, insert_word_embeds, delete_word_embeds,
-                        base_lengths, iw_length, dw_length,
+                        base_length, iw_length, dw_length,
                         attn_dim, hidden_dim, num_layer,
                         enable_alignment_history=False, enable_dropout=False, dropout_keep=0.1,
                         no_insert_delete_attn=False):
-    base_attn = seq2seq.BahdanauAttention(attn_dim, base_sent_embeds, base_lengths, name='src_attn')
+    base_attn = seq2seq.BahdanauAttention(attn_dim, base_sent_embeds, base_length, name='src_attn')
     attns = [base_attn]
     if not no_insert_delete_attn:
         insert_attn = seq2seq.BahdanauAttention(attn_dim, insert_word_embeds, iw_length, name='insert_attn')
         delete_attn = seq2seq.BahdanauAttention(attn_dim, delete_word_embeds, dw_length, name='delete_attn')
         attns += [insert_attn, delete_attn]
+
+    if no_insert_delete_attn:
+        assert len(attns) == 1
+    else:
+        assert len(attns) == 3
 
     bottom_cell = tf_rnn.LSTMCell(hidden_dim, name='bottom_cell')
     bottom_attn_cell = seq2seq.AttentionWrapper(
@@ -204,20 +209,20 @@ class DecoderOutputLayer(tf.layers.Layer):
 
 
 def train_decoder(agenda, embeddings,
-                  dec_inputs, src_sent_embeds, insert_word_embeds, delete_word_embeds,
-                  dec_input_lengths, src_lengths, iw_length, dw_length,
+                  dec_inputs, base_sent_hiddens, insert_word_embeds, delete_word_embeds,
+                  dec_input_lengths, base_length, iw_length, dw_length,
                   attn_dim, hidden_dim, num_layer, swap_memory, enable_dropout=False, dropout_keep=1.,
                   no_insert_delete_attn=False):
     with tf.variable_scope(OPS_NAME, 'decoder', []):
-        batch_size = tf.shape(src_sent_embeds)[0]
+        batch_size = tf.shape(base_sent_hiddens)[0]
 
         dec_inputs = tf.nn.embedding_lookup(embeddings, dec_inputs)
         helper = seq2seq.TrainingHelper(dec_inputs, dec_input_lengths, name='train_helper')
 
         cell = create_decoder_cell(
             agenda,
-            src_sent_embeds, insert_word_embeds, delete_word_embeds,
-            src_lengths, iw_length, dw_length,
+            base_sent_hiddens, insert_word_embeds, delete_word_embeds,
+            base_length, iw_length, dw_length,
             attn_dim, hidden_dim, num_layer,
             enable_dropout=enable_dropout, dropout_keep=dropout_keep,
             no_insert_delete_attn=no_insert_delete_attn
@@ -234,20 +239,20 @@ def train_decoder(agenda, embeddings,
 
 
 def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
-                      src_sent_embeds, insert_word_embeds, delete_word_embeds,
-                      src_lengths, iw_length, dw_length,
+                      base_sent_hiddens, insert_word_embeds, delete_word_embeds,
+                      base_length, iw_length, dw_length,
                       attn_dim, hidden_dim, num_layer, maximum_iterations, beam_width, swap_memory,
                       enable_dropout=False, dropout_keep=1., no_insert_delete_attn=False):
     with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
-        true_batch_size = tf.shape(src_sent_embeds)[0]
+        true_batch_size = tf.shape(base_sent_hiddens)[0]
 
         tiled_agenda = seq2seq.tile_batch(agenda, beam_width)
 
-        tiled_src_sent = seq2seq.tile_batch(src_sent_embeds, beam_width)
+        tiled_base_sent = seq2seq.tile_batch(base_sent_hiddens, beam_width)
         tiled_insert_embeds = seq2seq.tile_batch(insert_word_embeds, beam_width)
         tiled_delete_embeds = seq2seq.tile_batch(delete_word_embeds, beam_width)
 
-        tiled_src_lengths = seq2seq.tile_batch(src_lengths, beam_width)
+        tiled_src_lengths = seq2seq.tile_batch(base_length, beam_width)
         tiled_iw_lengths = seq2seq.tile_batch(iw_length, beam_width)
         tiled_dw_lengths = seq2seq.tile_batch(dw_length, beam_width)
 
@@ -256,7 +261,7 @@ def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
 
         cell = create_decoder_cell(
             tiled_agenda,
-            tiled_src_sent, tiled_insert_embeds, tiled_delete_embeds,
+            tiled_base_sent, tiled_insert_embeds, tiled_delete_embeds,
             tiled_src_lengths, tiled_iw_lengths, tiled_dw_lengths,
             attn_dim, hidden_dim, num_layer,
             enable_dropout=enable_dropout, dropout_keep=dropout_keep,
@@ -281,12 +286,12 @@ def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
 
 
 def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
-                        src_sent_embeds, insert_word_embeds, delete_word_embeds,
-                        src_lengths, iw_length, dw_length,
+                        base_sent_hiddens, insert_word_embeds, delete_word_embeds,
+                        base_length, iw_length, dw_length,
                         attn_dim, hidden_dim, num_layer, max_sentence_length, swap_memory,
                         enable_dropout=False, dropout_keep=1., no_insert_delete_attn=False):
     with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
-        batch_size = tf.shape(src_sent_embeds)[0]
+        batch_size = tf.shape(base_sent_hiddens)[0]
 
         start_token_id = tf.cast(start_token_id, tf.int32)
         stop_token_id = tf.cast(stop_token_id, tf.int32)
@@ -297,8 +302,8 @@ def greedy_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
 
         cell = create_decoder_cell(
             agenda,
-            src_sent_embeds, insert_word_embeds, delete_word_embeds,
-            src_lengths, iw_length, dw_length,
+            base_sent_hiddens, insert_word_embeds, delete_word_embeds,
+            base_length, iw_length, dw_length,
             attn_dim, hidden_dim, num_layer,
             enable_dropout=enable_dropout, dropout_keep=dropout_keep,
             no_insert_delete_attn=no_insert_delete_attn
