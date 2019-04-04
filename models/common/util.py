@@ -36,7 +36,7 @@ def save_tsv(filepath, rows):
 
 
 def get_free_words_set():
-    with open('free.txt', encoding='utf8') as f:
+    with open('free_words.txt', encoding='utf8') as f:
         free = set([l.strip() for l in f])
 
     return free
