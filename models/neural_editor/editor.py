@@ -92,7 +92,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
 
     train_decoder = decoder.train_decoder(input_agenda, embeddings, train_dec_inp,
                                           base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
-                                          train_dec_inp_len, src_len, iw_len, dw_len,
+                                          train_dec_inp_len, base_len, iw_len, dw_len,
                                           attn_dim, hidden_dim, num_decoder_layers, swap_memory,
                                           enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                           no_insert_delete_attn=no_insert_delete_attn)
@@ -102,7 +102,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                                                  vocab.get_token_id(vocab.START_TOKEN, vocab_table),
                                                  vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
                                                  base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
-                                                 src_len, iw_len, dw_len,
+                                                 base_len, iw_len, dw_len,
                                                  attn_dim, hidden_dim, num_decoder_layers, max_sent_length, beam_width,
                                                  swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                                  no_insert_delete_attn=no_insert_delete_attn)
@@ -111,7 +111,7 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                                                    vocab.get_token_id(vocab.START_TOKEN, vocab_table),
                                                    vocab.get_token_id(vocab.STOP_TOKEN, vocab_table),
                                                    base_sent_hidden_states, insert_word_embeds, delete_word_embeds,
-                                                   src_len, iw_len, dw_len,
+                                                   base_len, iw_len, dw_len,
                                                    attn_dim, hidden_dim, num_decoder_layers, max_sent_length,
                                                    swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                                    no_insert_delete_attn=no_insert_delete_attn)
