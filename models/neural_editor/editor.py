@@ -39,7 +39,8 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                  embed_matrix, vocab_table,
                  hidden_dim, agenda_dim, edit_dim, num_encoder_layers, num_decoder_layers, attn_dim, beam_width,
                  max_sent_length, dropout_keep, lamb_reg, norm_eps, norm_max, kill_edit, draw_edit, swap_memory,
-                 use_beam_decoder=False, use_dropout=False, no_insert_delete_attn=False):
+                 use_beam_decoder=False, use_dropout=False, no_insert_delete_attn=False,
+                 enable_vae=True):
     batch_size = tf.shape(source_words)[0]
 
     # [batch]
@@ -79,7 +80,8 @@ def editor_train(base_words, source_words, target_words, insert_words, delete_wo
                 delete_word_embeds,
                 iw_len,
                 dw_len,
-                edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep
+                edit_dim, lamb_reg, norm_eps, norm_max, dropout_keep,
+                enable_vae=enable_vae
             )
 
     # [batch x agenda_dim]

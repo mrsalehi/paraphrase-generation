@@ -39,7 +39,7 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         config.editor.norm_eps, config.editor.norm_max, config.editor.kill_edit,
         config.editor.draw_edit, config.editor.use_swap_memory,
         config.get('editor.use_beam_decoder', False), config.get('editor.enable_dropout', False),
-        config.get('editor.no_insert_delete_attn', False)
+        config.get('editor.no_insert_delete_attn', False), config.get('editor.enable_vae', True)
     )
 
     loss = optimizer.loss(train_decoder_output, gold_dec_out, gold_dec_out_len)

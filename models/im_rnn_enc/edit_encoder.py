@@ -104,7 +104,8 @@ def context_encoder(words, lengths, hidden_dim, num_layers, swap_memory=False, u
 def rnn_encoder(source_words, target_words, insert_words, delete_words,
                 source_lengths, target_lengths, iw_lengths, dw_lengths,
                 ctx_hidden_dim, ctx_hidden_layer, wa_hidden_dim, wa_hidden_layer,
-                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep=1., use_dropout=False, swap_memory=False):
+                edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep=1., use_dropout=False,
+                swap_memory=False, enable_vae=True):
     """
     Args:
         source_words:
@@ -172,6 +173,7 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
 
         edit_vector = tf.layers.dense(features, edit_dim, name='encoder_ev')
 
-        noised_edit_vector = sample_vMF(edit_vector, noise_scaler, norm_eps, norm_max)
+        if enable_vae:
+            edit_vector = sample_vMF(edit_vector, noise_scaler, norm_eps, norm_max)
 
-        return noised_edit_vector
+        return edit_vector

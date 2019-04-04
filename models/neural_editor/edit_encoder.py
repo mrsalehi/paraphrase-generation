@@ -236,7 +236,8 @@ def rnn_encoder(source_words, target_words, insert_words, delete_words,
 
 def accumulator_encoder(insert_words, delete_words,
                         iw_lengths, dw_lengths,
-                        edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep):
+                        edit_dim, noise_scaler, norm_eps, norm_max, dropout_keep,
+                        enable_vae=True):
     max_len = tf.shape(insert_words)[1]
     mask = tf.sequence_mask(iw_lengths, maxlen=max_len, dtype=tf.float32)
     mask = tf.expand_dims(mask, 2)
@@ -255,7 +256,8 @@ def accumulator_encoder(insert_words, delete_words,
     delete_embed = linear_prenoise(delete_embed)
 
     combined = tf.concat([insert_embed, delete_embed], axis=1)
-    combined = sample_vMF(combined, noise_scaler, norm_eps, norm_max)
+    if enable_vae:
+        combined = sample_vMF(combined, noise_scaler, norm_eps, norm_max)
 
     return combined
 
