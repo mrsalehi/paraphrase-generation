@@ -37,7 +37,7 @@ class ModelRunner(object):
 
     def _path_model_dir(self):
         data_dir = self._config.get('gcloud_storage_data_dir', self._data_dir)
-        self._config.put('model_dir', str(data_dir / self._config.model_dir))
+        self._config.put('model_dir', os.path.join(str(data_dir), self._config.model_dir))
 
     def train(self):
         self.model.train(self._config, self._data_dir)
