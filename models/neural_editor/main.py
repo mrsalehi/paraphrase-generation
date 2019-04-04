@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import fire
@@ -15,7 +16,7 @@ class ModelRunner(object):
         self._checkpoint = checkpoint
 
         self._config = Config.from_file(config)
-        self._config.put('model_dir', str(self._data_dir / self._config.model_dir))
+        self._path_model_dir()
         self._put_epoch_num()
 
         print("Model:", self.model.NAME)
@@ -33,6 +34,10 @@ class ModelRunner(object):
         num_epoch = self._config.optim.max_iters // num_batch_per_epoch + 1
 
         self._config.put('optim.num_epoch', num_epoch)
+
+    def _path_model_dir(self):
+        data_dir = self._config.get('gcloud_storage_data_dir', self._data_dir)
+        self._config.put('model_dir', str(data_dir / self._config.model_dir))
 
     def train(self):
         self.model.train(self._config, self._data_dir)
