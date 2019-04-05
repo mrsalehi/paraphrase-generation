@@ -51,15 +51,19 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
                                 src_words, tgt_words, inserted_words, deleted_words,
                                 ['extra'])
 
+        hooks = [
+            get_train_extra_summary_writer(config),
+            get_extra_summary_logger(ops, config),
+        ]
+
+        if config.get('logger.enable_profiler', False):
+            hooks.append(get_profiler_hook(config))
+
         return tf.estimator.EstimatorSpec(
             mode,
             train_op=train_op,
             loss=loss,
-            training_hooks=[
-                get_train_extra_summary_writer(config),
-                get_extra_summary_logger(ops, config),
-                get_profiler_hook(config)
-            ]
+            training_hooks=hooks
         )
 
     elif mode == tf.estimator.ModeKeys.EVAL:
