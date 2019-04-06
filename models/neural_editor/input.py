@@ -134,25 +134,6 @@ def input_fn_cmd(vocab_table):
     return dataset
 
 
-def input_fn_from_gen(gen, vocab_table):
-    if isinstance(vocab_table, dict):
-        vocab_table = vocab_table[vocab.STR_TO_INT]
-
-    dataset = tf.data.Dataset.from_generator(
-        generator=gen,
-        output_types=(tf.string, tf.string, tf.string, tf.string, tf.string),
-        output_shapes=((None,), (None,), (None,), (None,), (None,))
-    )
-    dataset = dataset.map(lambda *x: [vocab_table.lookup(i) for i in x])
-    dataset = dataset.batch(1)
-
-    fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
-
-    dataset = dataset.zip((dataset, fake_label))
-
-    return dataset
-
-
 def input_fn_from_gen_multi(gen, vocab_table, batch_size):
     if isinstance(vocab_table, dict):
         vocab_table = vocab_table[vocab.STR_TO_INT]
