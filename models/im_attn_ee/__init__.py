@@ -1,9 +1,9 @@
 import models.neural_editor as base
 import models.neural_editor.input as base_input
+from models.im_attn_ee.model import model_fn
 from models.im_vev.input import read_examples_from_file
-from models.im_vev.model import model_fn
 
-NAME = 'im_vev'
+NAME = 'im_attn_ee'
 
 base_input.read_examples_from_file = read_examples_from_file
 
