@@ -296,4 +296,4 @@ def attn_encoder(source_words, target_words, insert_words, delete_words,
         if enable_vae:
             edit_vector = sample_vMF(edit_vector, noise_scaler, norm_eps, norm_max)
 
-        return edit_vector, None, None
+        return edit_vector, tf.constant([[0]]), tf.constant([[0]])
