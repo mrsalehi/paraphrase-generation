@@ -107,9 +107,9 @@ class AttentionHead(Layer):
         self.d_v = d_v
         self.temperature = temperature
 
-        self.w_q = tf.layers.Dense(self.d_k, activation=None, use_bias=None)
-        self.w_k = tf.layers.Dense(self.d_k, activation=None, use_bias=None)
-        self.w_v = tf.layers.Dense(self.d_v, activation=None, use_bias=None)
+        self.w_q = tf.layers.Dense(self.d_k, activation=None, use_bias=False, name='w_q')
+        self.w_k = tf.layers.Dense(self.d_k, activation=None, use_bias=False, name='w_k')
+        self.w_v = tf.layers.Dense(self.d_v, activation=None, use_bias=False, name='w_v')
 
     def call(self, inputs, **kwargs):
         """
@@ -155,7 +155,7 @@ class MultiHeadAttention(Layer):
         self.heads = [AttentionHead(d_small, d_small, temp, name='head_%s' % i) for i in range(num_heads)]
 
         # [num_heads * d_small, d_model]
-        self.w_o = tf.layers.Dense(d_model, activation=None, use_bias=None)
+        self.w_o = tf.layers.Dense(d_model, activation=None, use_bias=False)
 
     def call(self, inputs, **kwargs):
         # list of [bs, len_q, d_small]
