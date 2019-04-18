@@ -169,7 +169,7 @@ def input_fn_from_gen_multi(gen, vocab_table, batch_size):
 
 
 def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=None, seed=0, noiser=None,
-             use_free_set=False):
+             use_free_set=False, shuffle_input=True):
     if isinstance(vocab_table, dict):
         vocab_table = vocab_table[vocab.STR_TO_INT]
 
@@ -198,8 +198,10 @@ def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=N
         dataset_splits.append(split)
 
     dataset = tf.data.Dataset.zip(tuple(dataset_splits))
-    if num_epochs:
+    if num_epochs and shuffle_input:
         dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(500, num_epochs))
+    elif num_epochs:
+        dataset = dataset.repeat(num_epochs)
 
     fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
 
@@ -217,7 +219,8 @@ def train_input_fn(config, data_dir, vocab_table):
         config.optim.num_epoch,
         config.seed,
         noiser=EditNoiser.from_config(config),
-        use_free_set=config.editor.use_free_set
+        use_free_set=config.editor.use_free_set,
+        shuffle_input=config.get('optim.shuffle_input', False)
     )
 
 
@@ -232,7 +235,8 @@ def eval_input_fn(config, data_dir, vocab_table, file_name='valid.tsv', num_exam
         num_examples=num_examples,
         seed=config.seed,
         noiser=EditNoiser.from_config(config),
-        use_free_set=config.editor.use_free_set
+        use_free_set=config.editor.use_free_set,
+        shuffle_input=config.get('optim.shuffle_input', False)
     )
 
 
