@@ -152,6 +152,10 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     loss = optimizer.loss(train_decoder_output, gold_dec_out, gold_dec_out_len)
     train_op, gradients_norm = optimizer.train(loss, config.optim.learning_rate, config.optim.max_norm_observe_steps)
 
+    tf.logging.info("Trainable variable")
+    for i in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+        tf.logging.info(str(i))
+
     if mode == tf.estimator.ModeKeys.TRAIN:
         tf.summary.scalar('grad_norm', gradients_norm)
         ops = add_extra_summary(config, vocab_i2s, train_decoder_output,
