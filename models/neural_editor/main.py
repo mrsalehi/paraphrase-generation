@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import fire
+import tensorflow as tf
 
 from models import neural_editor
 from models.common import util
@@ -19,9 +20,9 @@ class ModelRunner(object):
         self._path_model_dir()
         self._put_epoch_num()
 
-        print("Model:", self.model.NAME)
-        print("Config:")
-        print(self._config)
+        tf.logging.info("Model: "+ self.model.NAME)
+        tf.logging.info("Config:")
+        tf.logging.info(str(self._config))
         print()
 
     def _put_epoch_num(self):
