@@ -1,4 +1,5 @@
 import itertools
+import pickle
 
 from tqdm import tqdm
 
@@ -63,6 +64,7 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
     )
 
     plan2paraphrase = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
+    plan2attn_weight = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
@@ -70,10 +72,17 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
 
         plan_index, edit_index = formula2plan[i]
         plan2paraphrase[plan_index][edit_index] = paraphrases
+        if 'attns_weight_0' in o and 'attns_weight_1' in o:
+            plan2attn_weight[plan_index][edit_index] = (o['attns_weight_0'], o['attns_weight_1'])
 
     assert len(plans) == len(plan2paraphrase)
 
-    return plan2paraphrase
+    return plan2paraphrase, plan2attn_weight
+
+
+def save_attn_weights(attn_weights, name):
+    with open(name, 'wb') as f:
+        pickle.dump(attn_weights, f)
 
 
 def flatten(plan2paras):

@@ -138,10 +138,10 @@ class AttentionHead(Layer):
         padding = tf.ones_like(mem_mask, dtype=tf.float32) * -1e9
         attn = tf.where(tf.equal(mem_mask, True), attn, padding)
 
-        attn = tf.nn.softmax(attn)  # bs x len_q x len_k
-        attn_result = tf.matmul(attn, vs)  # bs x len_q x d_small
+        attn_weights = tf.nn.softmax(attn)  # bs x len_q x len_k
+        context = tf.matmul(attn_weights, vs)  # bs x len_q x d_small
 
-        return attn_result
+        return context, attn_weights
 
 
 class MultiHeadAttention(Layer):
@@ -159,12 +159,20 @@ class MultiHeadAttention(Layer):
 
     def call(self, inputs, **kwargs):
         # list of [bs, len_q, d_small]
-        head_result = []
+        contexts = []
+        attns_weight = []
         for head in self.heads:
-            head_result.append(head(inputs))
+            context, attn = head(inputs)
+            contexts.append(context)
+            attns_weight.append(attn)
 
-        attn = tf.concat(head_result, axis=2)
-        attn = self.w_o(attn)
+        attns_weight = tf.stack(attns_weight)
+        attns_weight = tf.transpose(attns_weight, [1, 0, 2, 3])
+
+        tf.add_to_collection('attns_weight', attns_weight)
+
+        aggreg_context = tf.concat(contexts, axis=2)
+        attn = self.w_o(aggreg_context)
 
         return attn
 

@@ -3,6 +3,7 @@ import pickle
 import random
 
 import tensorflow as tf
+
 try:
     from tensorflow.contrib.estimator import InMemoryEvaluatorHook
 except:
@@ -355,7 +356,8 @@ def generate_paraphrase(config, data_dir, checkpoint_path, plan_path, output_pat
 
     estimator = get_estimator(config, embed_matrix, my_model_fn)
 
-    paras = paraphrase_gen.generate(estimator, plan_path, checkpoint_path, config, V)
+    paras, attn_weights = paraphrase_gen.generate(estimator, plan_path, checkpoint_path, config, V)
     flatten = paraphrase_gen.flatten(paras)
 
     save_tsv(output_path, flatten)
+    paraphrase_gen.save_attn_weights(attn_weights, '%s.attn_weights' % output_path)
