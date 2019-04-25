@@ -3,7 +3,7 @@ include "eval/short.txt"
 
 seed = 0
 
-model_dir = im_v1_dbpedia
+model_dir = im_v1_dbpedia4
 
 editor {
     vocab_size = 10000  # a proper size would be >20000
@@ -27,6 +27,7 @@ editor {
     kill_edit = False
     draw_edit = False
     use_swap_memory = True
+    use_free_set = False
     embed_sentence = False
     wvec_path = glove.6B.300d_dbpedia.txt
 

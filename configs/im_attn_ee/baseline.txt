@@ -3,7 +3,7 @@ include "eval/short.txt"
 
 seed = 0
 
-model_dir = im_v4_quora_naug
+model_dir = im_v4_quora_naug4
 
 editor {
     vocab_size = 10000  # a proper size would be >20000

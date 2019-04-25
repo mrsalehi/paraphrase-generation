@@ -3,7 +3,7 @@ include "eval/short.txt"
 
 seed = 0
 
-model_dir = im_v4_quora_naug4
+model_dir = im_v3_quora_naug
 
 editor {
     vocab_size = 10000  # a proper size would be >20000
@@ -16,7 +16,7 @@ editor {
     encoder_layers = 3
     decoder_layers = 3
     beam_width = 5
-    no_insert_delete_attn = True
+    no_insert_delete_attn = False
     dropout_keep = 0.8
     ident_pr = 0.1
     attend_pr = 0.0
@@ -29,7 +29,6 @@ editor {
     use_swap_memory = True
     use_free_set = False
     embed_sentence = False
-    use_beam_decoder = True
     wvec_path = glove.6B.300d_dbpedia.txt
 
     edit_enc {
@@ -37,10 +36,6 @@ editor {
         ctx_hidden_layer = 3
         wa_hidden_dim = 128
         wa_hidden_layer = 1
-        meve_hidden_dim = 128
-        meve_hidden_layer = 1
-        num_heads = 4
-        micro_ev_dim = 128
     }
 }
 
