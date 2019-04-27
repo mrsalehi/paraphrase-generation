@@ -31,10 +31,10 @@ def create_micro_edit_vectors(cnx_src, cnx_tgt, src_lengths, tgt_lengths,
     micro_evs_st = micro_ev_st_creator(micro_edit_feed_st)  # bs x src_seq_len x micro_edit_vec_dim
     micro_evs_ts = micro_ev_ts_creator(micro_edit_feed_ts)  # bs x src_seq_len x micro_edit_vec_dim
 
-    normalizer_st = tf.keras.layers.BatchNormalization(name="normalizer_st")
-    normalizer_ts = tf.keras.layers.BatchNormalization(name="normalizer_ts")
-    micro_evs_st = normalizer_st(micro_evs_st)
-    micro_evs_ts = normalizer_ts(micro_evs_ts)
+    is_training = tf.get_collection('is_training')[0]
+
+    micro_evs_st = tf.layers.batch_normalization(micro_evs_st, training=is_training)
+    micro_evs_ts = tf.layers.batch_normalization(micro_evs_ts, training=is_training)
 
     if use_dropout and dropout_keep < 1.:
         micro_evs_st = tf.nn.dropout(micro_evs_st, dropout_keep)

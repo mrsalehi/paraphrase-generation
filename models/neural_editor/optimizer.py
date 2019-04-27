@@ -1,5 +1,4 @@
 import tensorflow as tf
-
 from tensorflow.contrib import seq2seq
 
 from models.neural_editor import decoder
@@ -56,6 +55,8 @@ def train(loss, lr, num_steps_to_observe_norm):
 
         clipped, current_global_norm = tf.cond(global_step < num_steps_to_observe_norm, true, false)
 
-        train_op = optimizer.apply_gradients(zip(clipped, vars), global_step)
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            train_op = optimizer.apply_gradients(zip(clipped, vars), global_step)
 
         return train_op, current_global_norm

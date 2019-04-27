@@ -20,6 +20,9 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     else:
         base_words, output_words, src_words, tgt_words, inserted_words, deleted_words = features
 
+    is_training = mode == tf.estimator.ModeKeys.TRAIN
+    tf.add_to_collection('is_training', is_training)
+
     if mode != tf.estimator.ModeKeys.TRAIN:
         config.put('editor.enable_dropout', False)
         config.put('editor.dropout_keep', 1.0)
