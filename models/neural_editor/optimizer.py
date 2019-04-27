@@ -57,6 +57,8 @@ def train(loss, lr, num_steps_to_observe_norm):
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
+            tf.logging.info("Update ops")
+            tf.logging.info(update_ops)
             train_op = optimizer.apply_gradients(zip(clipped, vars), global_step)
 
         return train_op, current_global_norm
