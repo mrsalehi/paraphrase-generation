@@ -33,8 +33,8 @@ def create_micro_edit_vectors(cnx_src, cnx_tgt, src_lengths, tgt_lengths,
 
     is_training = tf.get_collection('is_training')[0]
 
-    micro_evs_st = tf.layers.batch_normalization(micro_evs_st, training=is_training)
-    micro_evs_ts = tf.layers.batch_normalization(micro_evs_ts, training=is_training)
+    micro_evs_st = tf.layers.batch_normalization(micro_evs_st, training=is_training, name="normalize_st")
+    micro_evs_ts = tf.layers.batch_normalization(micro_evs_ts, training=is_training, name="normalize_ts")
 
     if use_dropout and dropout_keep < 1.:
         micro_evs_st = tf.nn.dropout(micro_evs_st, dropout_keep)
