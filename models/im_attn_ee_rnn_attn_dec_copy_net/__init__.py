@@ -16,6 +16,34 @@ base_para_gen.create_formulas = create_formulas
 base_para_gen.input_fn_from_gen_multi = input_fn_from_gen_multi
 
 
+# def train(config, data_dir):
+#     V, embed_matrix = vocab.read_word_embeddings(
+#         data_dir / 'word_vectors' / config.editor.wvec_path,
+#         config.editor.word_dim,
+#         config.editor.vocab_size
+#     )
+#
+#     estimator = base.get_estimator(config, embed_matrix, model_fn)
+#
+#     if config.get('eval.enable', True):
+#         hooks = [
+#             base.get_eval_hook(estimator,
+#                                lambda: base_input.eval_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
+#                                name='eval',
+#                                every_n_steps=config.eval.eval_steps),
+#         ]
+#     else:
+#         hooks = []
+#
+#     lms_hook = LMSSessionRunHook({'optimization'})
+#     hooks.append(lms_hook)
+#
+#     return estimator.train(
+#         input_fn=lambda: base_input.train_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
+#         hooks=hooks,
+#         max_steps=config.optim.max_iters
+#     )
+
 def train(*args):
     return base.train(*args, my_model_fn=model_fn)
 

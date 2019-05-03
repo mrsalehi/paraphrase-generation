@@ -9,6 +9,7 @@ from tensorflow.python.layers.core import Dense
 from tensorflow.python.util import nest
 
 from models.common import sequence, vocab
+from models.neural_editor.decoder import DecoderOutputLayer
 
 OPS_NAME = 'decoder'
 
@@ -247,9 +248,8 @@ def create_decoder_cell(agenda, extended_base_words, oov, base_sent_hiddens, mev
 
     zero_state = create_trainable_zero_state(decoder_cell, batch_size, beam_width=beam_width)
 
-    output_layer = Dense(vocab_size,
-                         kernel_initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.1),
-                         use_bias=False)
+    beam_decoder = beam_width is not None
+    output_layer = DecoderOutputLayer(vocab.get_embeddings(), beam_decoder=beam_decoder)
 
     # max_oov_length = tf.shape(oov)[-1]
     copy_net_cell = CopyNetWrapper(
