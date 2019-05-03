@@ -10,7 +10,7 @@ from models.neural_editor.decoder import prepare_decoder_inputs, prepare_decoder
 from models.neural_editor.edit_encoder import random_noise_encoder
 
 
-def prepare_decoder_input_output(words, length):
+def prepare_decoder_input_output(words, words_extended, length):
     """
     Args:
         words: tensor of word ids, [batch x max_len]
@@ -31,7 +31,7 @@ def prepare_decoder_input_output(words, length):
     dec_input = prepare_decoder_inputs(words, start_token_id)
     dec_input_len = seq.length_pre_embedding(dec_input)
 
-    dec_output = prepare_decoder_output(words, length, stop_token_id, pad_token_id)
+    dec_output = prepare_decoder_output(words_extended, length, stop_token_id, pad_token_id)
     dec_output_len = seq.length_pre_embedding(dec_output)
 
     return dec_input, dec_input_len, dec_output, dec_output_len
@@ -96,10 +96,13 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
     base_agenda = agn.linear(base_sent_embed, edit_vector, agenda_dim)
 
     train_dec_inp, train_dec_inp_len, \
-    train_dec_out, train_dec_out_len = prepare_decoder_input_output(extended_output_words, output_len)
+    train_dec_out, train_dec_out_len = prepare_decoder_input_output(output_words, extended_output_words, output_len)
+
+    train_dec_inp_extended = prepare_decoder_inputs(extended_output_words, tf.cast(-1, tf.int64))
 
     train_decoder = decoder.train_decoder(base_agenda, embeddings, extended_base_words, oov,
-                                          train_dec_inp, base_sent_hidden_states, wa_inserted, wa_deleted,
+                                          train_dec_inp, train_dec_inp_extended, base_sent_hidden_states,
+                                          wa_inserted, wa_deleted,
                                           train_dec_inp_len, base_len, src_len, tgt_len,
                                           vocab_size, attn_dim, hidden_dim, num_decoder_layers, swap_memory,
                                           enable_dropout=use_dropout, dropout_keep=dropout_keep,

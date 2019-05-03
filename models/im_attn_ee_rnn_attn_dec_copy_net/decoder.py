@@ -297,31 +297,35 @@ def create_trainable_zero_state(decoder_cell, batch_size, beam_width=None):
 
 def create_embedding_fn(vocab_size):
     def fn(ids):
-        ids = tf.cast(ids, tf.int64)
+        orig_ids = tf.cast(ids, tf.int64)
+
         ids = tf.where(
-            tf.less(ids, vocab_size),
-            ids, tf.ones_like(ids) * vocab.get_token_id(vocab.UNKNOWN_TOKEN)
+            tf.less(orig_ids, vocab_size),
+            orig_ids, tf.ones_like(orig_ids) * vocab.get_token_id(vocab.UNKNOWN_TOKEN)
         )
         embeds = vocab.embed_tokens(ids)
-        inputs = tf.concat([embeds, tf.cast(tf.expand_dims(ids, 1), tf.float32)], axis=1)
+
+        orig_ids = tf.where(
+            tf.equal(orig_ids, vocab.get_token_id(vocab.START_TOKEN)),
+            tf.ones_like(orig_ids) * -1,
+            orig_ids
+        )
+
+        inputs = tf.concat([embeds, tf.cast(tf.expand_dims(orig_ids, 1), tf.float32)], axis=1)
+
         return inputs
 
     return fn
 
 
 def train_decoder(agenda, embeddings, extended_base_words, oov,
-                  dec_inputs, base_sent_hiddens, insert_word_embeds, delete_word_embeds,
+                  dec_inputs, dec_extended_inputs, base_sent_hiddens, insert_word_embeds, delete_word_embeds,
                   dec_input_lengths, base_length, iw_length, dw_length,
                   vocab_size, attn_dim, hidden_dim, num_layer, swap_memory, enable_dropout=False, dropout_keep=1.,
                   no_insert_delete_attn=False):
     with tf.variable_scope(OPS_NAME, 'decoder', []):
-        dec_inputs = tf.where(
-            tf.less(dec_inputs, vocab_size),
-            dec_inputs, tf.ones_like(dec_inputs) * vocab.OOV_TOKEN_ID
-        )
         dec_input_embeds = vocab.embed_tokens(dec_inputs)
-
-        inputs = tf.concat([dec_input_embeds, tf.cast(tf.expand_dims(dec_inputs, 2), tf.float32)], axis=2)
+        inputs = tf.concat([dec_input_embeds, tf.cast(tf.expand_dims(dec_extended_inputs, 2), tf.float32)], axis=2)
         helper = seq2seq.TrainingHelper(inputs, dec_input_lengths, name='train_helper')
 
         cell, zero_states = create_decoder_cell(
