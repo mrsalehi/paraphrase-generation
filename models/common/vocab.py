@@ -23,6 +23,8 @@ EMBEDDING_MATRIX_COLL_NAME = 'embedding_matrix'
 
 STR_TO_INT = 'str_to_int'
 INT_TO_STR = 'int_to_str'
+RAW_WORD2ID = 'word2id'
+RAW_ID2WORD = 'id2word'
 
 
 def emulate_distribution(shape, target_samples):
@@ -112,9 +114,13 @@ def create_vocab_lookup_tables(vocab):
         name='vocab_lookup_int_to_str'
     )
 
+    word2id = {w: i for i, w in enumerate(vocab)}
+
     vocab_lookup = {
         INT_TO_STR: int_to_str,
-        STR_TO_INT: str_to_int
+        STR_TO_INT: str_to_int,
+        RAW_WORD2ID: word2id,
+        RAW_ID2WORD: vocab
     }
 
     graph_utils.add_dict_to_collection(vocab_lookup, VOCAB_LOOKUP_COLL_NAME)
