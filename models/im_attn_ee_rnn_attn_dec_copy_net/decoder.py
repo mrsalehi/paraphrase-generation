@@ -14,7 +14,7 @@ OPS_NAME = 'decoder'
 
 
 class CopyNetWrapperState(
-    collections.namedtuple("CopyNetWrapperState", ("cell_state", "last_ids", "prob_c"))):
+    collections.namedtuple("CopyNetWrapperState", ("cell_state", "prob_c"))):
     def clone(self, **kwargs):
         def with_same_shape(old, new):
             """Check and set new tensor's shape."""
@@ -50,12 +50,23 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
         self.max_oovs = max_oovs
         self.output_layer = output_layer
         self._output_size = vocab_size + max_oovs
+        self.vocab_size = vocab_size
         self.copy_layer = Dense(self.cell.output_size[1], activation=tf.tanh, use_bias=False, name="Copy_Weight")
 
-    def __call__(self, inputs, state):
-        last_ids = state.last_ids
+    def _get_input_embeddings(self, ids):
+        ids = tf.where(
+            tf.less(ids, self.vocab_size),
+            ids, tf.ones_like(ids) * vocab.OOV_TOKEN_ID
+        )
+
+        return vocab.embed_tokens(ids)
+
+    def __call__(self, last_ids, state):
         prob_c = state.prob_c
         cell_state = state.cell_state
+
+        last_ids = tf.cast(last_ids, tf.int64)
+        inputs = self._get_input_embeddings(last_ids)
 
         # get selective read
         # batch * input length
@@ -78,8 +89,7 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
         # batch * length
         copy_score = tf.einsum("ijk,ik->ij", copy_score, outputs)
 
-        vocab_size = tf.shape(vocab_dist)[-1]
-        extended_vsize = vocab_size + self.max_oovs
+        extended_vsize = self.vocab_size + self.max_oovs
 
         batch_size = tf.shape(vocab_dist)[0]
         extra_zeros = tf.zeros((batch_size, self.max_oovs))
@@ -92,9 +102,6 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
 
         final_dist = vocab_dists_extended + attn_dists_projected
 
-        # This is greeding search, need to test with beam search
-        last_ids = tf.argmax(final_dist, axis=-1, output_type=tf.int64)
-
         # this is used to calculate p(y_t,c|.)
         # safe softmax
         final_dist_max = tf.expand_dims(tf.reduce_max(final_dist, axis=1), axis=1)
@@ -102,7 +109,7 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
         p_c = tf.exp(attn_dists_projected - final_dist_max) / tf.expand_dims(final_dist_exp, axis=1)
         p_c = tf.einsum("ijn,in->ij", source_mask, p_c)
 
-        state = CopyNetWrapperState(cell_state=cell_state, last_ids=last_ids, prob_c=p_c)
+        state = CopyNetWrapperState(cell_state=cell_state, prob_c=p_c)
         return final_dist, state
 
     @property
@@ -111,7 +118,7 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
             It can be represented by an Integer, a TensorShape or a tuple of Integers
             or TensorShapes.
         """
-        return CopyNetWrapperState(cell_state=self.cell.state_size, last_ids=tf.TensorShape([]),
+        return CopyNetWrapperState(cell_state=self.cell.state_size,
                                    prob_c=self.source_extend_tokens.shape[-1].value)
 
     @property
@@ -122,9 +129,8 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
     def zero_state(self, batch_size, dtype):
         with tf.name_scope(type(self).__name__ + "ZeroState", values=[batch_size]):
             cell_state = self.cell.zero_state(batch_size, dtype)
-            last_ids = tf.zeros([batch_size], tf.int64) - 1
             prob_c = tf.zeros([batch_size, tf.shape(self.encode_output)[1]], tf.float32)
-            return CopyNetWrapperState(cell_state=cell_state, last_ids=last_ids, prob_c=prob_c)
+            return CopyNetWrapperState(cell_state=cell_state, prob_c=prob_c)
 
 
 class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
@@ -249,7 +255,7 @@ def create_decoder_cell(agenda, extended_base_words, oov, base_sent_hiddens, mev
     copy_net_cell = CopyNetWrapper(
         decoder_cell,
         extended_base_words,
-        100,
+        50,
         base_sent_hiddens,
         output_layer,
         vocab_size,
@@ -308,7 +314,6 @@ def train_decoder(agenda, embeddings, extended_base_words, oov,
                   vocab_size, attn_dim, hidden_dim, num_layer, swap_memory, enable_dropout=False, dropout_keep=1.,
                   no_insert_delete_attn=False):
     with tf.variable_scope(OPS_NAME, 'decoder', []):
-        dec_inputs = tf.nn.embedding_lookup(embeddings, dec_inputs)
         helper = seq2seq.TrainingHelper(dec_inputs, dec_input_lengths, name='train_helper')
 
         cell, zero_states = create_decoder_cell(
@@ -338,7 +343,7 @@ def greedy_eval_decoder(agenda, embeddings, extended_base_words, oov,
         start_token_id = tf.cast(start_token_id, tf.int32)
         stop_token_id = tf.cast(stop_token_id, tf.int32)
 
-        helper = seq2seq.GreedyEmbeddingHelper(create_embedding_fn(vocab_size),
+        helper = seq2seq.GreedyEmbeddingHelper(lambda x: x,
                                                tf.fill([batch_size], start_token_id),
                                                stop_token_id)
 

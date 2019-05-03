@@ -10,7 +10,7 @@ from models.neural_editor.decoder import prepare_decoder_inputs, prepare_decoder
 from models.neural_editor.edit_encoder import random_noise_encoder
 
 
-def prepare_decoder_input_output(words, extended_words, length):
+def prepare_decoder_input_output(words, length):
     """
     Args:
         words: tensor of word ids, [batch x max_len]
@@ -31,7 +31,7 @@ def prepare_decoder_input_output(words, extended_words, length):
     dec_input = prepare_decoder_inputs(words, start_token_id)
     dec_input_len = seq.length_pre_embedding(dec_input)
 
-    dec_output = prepare_decoder_output(extended_words, length, stop_token_id, pad_token_id)
+    dec_output = prepare_decoder_output(words, length, stop_token_id, pad_token_id)
     dec_output_len = seq.length_pre_embedding(dec_output)
 
     return dec_input, dec_input_len, dec_output, dec_output_len
@@ -48,7 +48,7 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
 
     # [batch]
     base_len = seq.length_pre_embedding(base_words)
-    output_len = seq.length_pre_embedding(output_words)
+    output_len = seq.length_pre_embedding(extended_output_words)
     src_len = seq.length_pre_embedding(source_words)
     tgt_len = seq.length_pre_embedding(target_words)
     iw_len = seq.length_pre_embedding(insert_words)
@@ -96,7 +96,7 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
     base_agenda = agn.linear(base_sent_embed, edit_vector, agenda_dim)
 
     train_dec_inp, train_dec_inp_len, \
-    train_dec_out, train_dec_out_len = prepare_decoder_input_output(output_words, extended_output_words, output_len)
+    train_dec_out, train_dec_out_len = prepare_decoder_input_output(extended_output_words, output_len)
 
     train_decoder = decoder.train_decoder(base_agenda, embeddings, extended_base_words, oov,
                                           train_dec_inp, base_sent_hidden_states, wa_inserted, wa_deleted,
@@ -120,7 +120,8 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
                                                    vocab.get_token_id(vocab.STOP_TOKEN),
                                                    base_sent_hidden_states, wa_inserted, wa_deleted,
                                                    base_len, src_len, tgt_len,
-                                                   vocab_size, attn_dim, hidden_dim, num_decoder_layers, max_sent_length,
+                                                   vocab_size, attn_dim, hidden_dim, num_decoder_layers,
+                                                   max_sent_length,
                                                    swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                                    no_insert_delete_attn=no_insert_delete_attn)
 
