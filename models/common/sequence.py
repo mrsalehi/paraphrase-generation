@@ -21,6 +21,15 @@ def length_pre_embedding(sequence, name=None):
     return length
 
 
+def length_string(sequence, pad, name=None):
+    with tf.name_scope(name, 'seq_length', [sequence]):
+        used = tf.not_equal(sequence, pad)
+        length = tf.reduce_sum(used, 1)
+        length = tf.cast(length, tf.int32)
+
+    return length
+
+
 def last_relevant(output, length):
     batch_size = tf.shape(output)[0]
     max_length = tf.shape(output)[1]

@@ -4,7 +4,7 @@ import tensorflow as tf
 
 tf.enable_eager_execution()
 from models.im_attn_ee_rnn_attn_dec_copy_net.input import input_fn
-from models.common import vocab
+from models.common import vocab, sequence
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
@@ -31,5 +31,7 @@ def test_num_examples():
         src_words, tgt_words, \
         inserted_words, deleted_words, \
         oov = features
+
+        oov_len = sequence.length_string(oov, vocab.PAD_TOKEN)
 
         print(features)
