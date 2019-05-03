@@ -62,12 +62,12 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
 
         return vocab.embed_tokens(ids)
 
-    def __call__(self, last_ids, state):
+    def call(self, inputs, state):
         prob_c = state.prob_c
         cell_state = state.cell_state
 
-        last_ids = tf.cast(last_ids, tf.int64)
-        inputs = self._get_input_embeddings(last_ids)
+        last_ids = tf.cast(inputs[:, 300], tf.int64)
+        inputs = inputs[:, :300]
 
         # get selective read
         # batch * input length
@@ -302,8 +302,9 @@ def create_embedding_fn(vocab_size):
             tf.less(ids, vocab_size),
             ids, tf.ones_like(ids) * vocab.get_token_id(vocab.UNKNOWN_TOKEN)
         )
-
-        return vocab.embed_tokens(ids)
+        embeds = vocab.embed_tokens(ids)
+        inputs = tf.concat([embeds, tf.cast(tf.expand_dims(ids, 1), tf.float32)], axis=1)
+        return inputs
 
     return fn
 
@@ -314,7 +315,14 @@ def train_decoder(agenda, embeddings, extended_base_words, oov,
                   vocab_size, attn_dim, hidden_dim, num_layer, swap_memory, enable_dropout=False, dropout_keep=1.,
                   no_insert_delete_attn=False):
     with tf.variable_scope(OPS_NAME, 'decoder', []):
-        helper = seq2seq.TrainingHelper(dec_inputs, dec_input_lengths, name='train_helper')
+        dec_inputs = tf.where(
+            tf.less(dec_inputs, vocab_size),
+            dec_inputs, tf.ones_like(dec_inputs) * vocab.OOV_TOKEN_ID
+        )
+        dec_input_embeds = vocab.embed_tokens(dec_inputs)
+
+        inputs = tf.concat([dec_input_embeds, tf.cast(tf.expand_dims(dec_inputs, 2), tf.float32)], axis=2)
+        helper = seq2seq.TrainingHelper(inputs, dec_input_lengths, name='train_helper')
 
         cell, zero_states = create_decoder_cell(
             agenda, extended_base_words, oov,
@@ -343,7 +351,7 @@ def greedy_eval_decoder(agenda, embeddings, extended_base_words, oov,
         start_token_id = tf.cast(start_token_id, tf.int32)
         stop_token_id = tf.cast(stop_token_id, tf.int32)
 
-        helper = seq2seq.GreedyEmbeddingHelper(lambda x: x,
+        helper = seq2seq.GreedyEmbeddingHelper(create_embedding_fn(vocab_size),
                                                tf.fill([batch_size], start_token_id),
                                                stop_token_id)
 

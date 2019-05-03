@@ -40,7 +40,7 @@ def get_estimator(config, embed_matrix, my_model_fn=model_fn):
         save_checkpoints_steps=config.eval.save_steps,
         save_summary_steps=config.eval.save_summary_steps,
         keep_checkpoint_max=config.eval.keep_checkpoint_max,
-        log_step_count_steps=10,
+        log_step_count_steps=10
     )
 
     estimator = tf.estimator.Estimator(
