@@ -1,15 +1,19 @@
 import models.neural_editor as base
 import models.neural_editor.decoder as base_decoder
 import models.neural_editor.input as base_input
+import models.neural_editor.paraphrase_gen as base_para_gen
 from models.im_attn_ee_rnn_attn_dec_copy_net.decoder import create_decoder_cell
-from models.im_attn_ee_rnn_attn_dec_copy_net.input import read_examples_from_file, input_fn
+from models.im_attn_ee_rnn_attn_dec_copy_net.input import read_examples_from_file, input_fn, input_fn_from_gen_multi
 from models.im_attn_ee_rnn_attn_dec_copy_net.model import model_fn
+from models.im_attn_ee_rnn_attn_dec_copy_net.paraphrase_gen import create_formulas
 
 NAME = 'im_attn_ee_rnn_attn_dec_copy_net'
 
 base_decoder.create_decoder_cell = create_decoder_cell
 base_input.read_examples_from_file = read_examples_from_file
 base_input.input_fn = input_fn
+base_para_gen.create_formulas = create_formulas
+base_para_gen.input_fn_from_gen_multi = input_fn_from_gen_multi
 
 
 def train(*args):

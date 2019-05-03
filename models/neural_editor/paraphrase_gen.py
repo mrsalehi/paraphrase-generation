@@ -46,6 +46,8 @@ def clean_sentence(sent):
 
 
 def generate(estimator, plan_path, checkpoint_path, config, V):
+    vocab.create_vocab_lookup_tables(V)
+
     batch_size = config.optim.batch_size
     if config.get('editor.use_beam_decoder', False):
         beam_width = config.editor.beam_width

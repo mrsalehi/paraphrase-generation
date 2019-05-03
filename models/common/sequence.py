@@ -23,7 +23,7 @@ def length_pre_embedding(sequence, name=None):
 
 def length_string(sequence, pad, name=None):
     with tf.name_scope(name, 'seq_length', [sequence]):
-        used = tf.not_equal(sequence, pad)
+        used = tf.cast(tf.not_equal(sequence, pad), tf.int32)
         length = tf.reduce_sum(used, 1)
         length = tf.cast(length, tf.int32)
 

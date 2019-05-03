@@ -63,7 +63,7 @@ def infer_dtype(lst):
         else:
             dtype = tf.string
     else:
-        dtype = tf.string
+        dtype = tf.int64
 
     return dtype
 
@@ -71,6 +71,13 @@ def infer_dtype(lst):
 def parse_instance(instance, noiser=None, free=None):
     if isinstance(instance, str):
         instance = instance.split('\t')
+    elif isinstance(instance, dict):
+        instance = [
+            instance.get('base', ''),
+            instance.get('output', ''),
+            instance.get('src', ''),
+            instance.get('tgt', ''),
+        ]
 
     assert len(instance) == 4
 
@@ -101,6 +108,9 @@ def parse_instance(instance, noiser=None, free=None):
 
     if len(delete_words) == 0:
         delete_words.append(vocab.UNKNOWN_TOKEN)
+
+    if len(oov) == 0:
+        oov = [vocab.PAD_TOKEN]
 
     return (orig_base_ids, extended_base_ids,
             orig_output_ids, extended_output_ids,
@@ -138,7 +148,7 @@ def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=N
     vocab_table = vocab.get_vocab_lookup_tables()[vocab.STR_TO_INT]
 
     pad_token = tf.constant(bytes(PAD_TOKEN, encoding='utf8'), dtype=tf.string)
-    pad_value = vocab_table.lookup(pad_token)
+    pad_id = vocab_table.lookup(pad_token)
 
     base_dataset = read_examples_from_file(
         file_path, num_examples, seed,
@@ -158,7 +168,7 @@ def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=N
         if split_dtype == tf.string:
             pad = pad_token
         else:
-            pad = pad_value
+            pad = pad_id
 
         split = split.padded_batch(
             batch_size,
@@ -178,5 +188,46 @@ def input_fn(file_path, vocab_table, batch_size, num_epochs=None, num_examples=N
 
     dataset = dataset.zip((dataset, fake_label)) \
         .prefetch(1)
+
+    return dataset
+
+
+def input_fn_from_gen_multi(gen, vocab_table, batch_size):
+    if isinstance(vocab_table, dict):
+        vocab_table = vocab_table[vocab.STR_TO_INT]
+
+    base_dataset = list(gen())
+
+    pad_token = tf.constant(bytes(PAD_TOKEN, encoding='utf8'), dtype=tf.string)
+    pad_id = vocab_table.lookup(pad_token)
+
+    dataset_splits = []
+    for index in range(len(base_dataset[0])):
+        split_dtype = infer_dtype(base_dataset[0][index])
+
+        split = tf.data.Dataset.from_generator(
+            generator=get_generator(base_dataset, index),
+            output_types=(split_dtype),
+            output_shapes=(None,)
+        )
+
+        if split_dtype == tf.string:
+            pad = pad_token
+        else:
+            pad = pad_id
+
+        split = split.padded_batch(
+            batch_size,
+            padded_shapes=[None],
+            padding_values=pad
+        )
+
+        dataset_splits.append(split)
+
+    dataset = tf.data.Dataset.zip(tuple(dataset_splits))
+
+    fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
+
+    dataset = dataset.zip((dataset, fake_label))
 
     return dataset
