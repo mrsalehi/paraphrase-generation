@@ -9,7 +9,6 @@ from tensorflow.python.layers.core import Dense
 from tensorflow.python.util import nest
 
 from models.common import sequence, vocab
-from models.neural_editor.decoder import DecoderOutputLayer
 
 OPS_NAME = 'decoder'
 
@@ -127,9 +126,8 @@ class CopyNetWrapper(tf.contrib.rnn.RNNCell):
         """Integer or TensorShape: size of outputs produced by this cell."""
         return self._output_size
 
-    def zero_state(self, batch_size, dtype):
+    def zero_state(self, cell_state, batch_size):
         with tf.name_scope(type(self).__name__ + "ZeroState", values=[batch_size]):
-            cell_state = self.cell.zero_state(batch_size, dtype)
             prob_c = tf.zeros([batch_size, tf.shape(self.encode_output)[1]], tf.float32)
             return CopyNetWrapperState(cell_state=cell_state, prob_c=prob_c)
 
@@ -202,13 +200,48 @@ class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
         )
 
 
+class DecoderOutputLayer(tf.layers.Layer):
+    def __init__(self, embedding, beam_decoder=False, **kwargs):
+        super().__init__(**kwargs)
+
+        self.embed_dim = embedding.shape[-1]
+        self.vocab_size = embedding.shape[0]
+
+        self.embedding = embedding
+        self.vocab_projection_pos = tf.layers.Dense(self.embed_dim, name='vocab_projection_pos')
+        self.vocab_projection_neg = tf.layers.Dense(self.embed_dim, name='vocab_projection_neg')
+
+        self.beam_decoder = beam_decoder
+
+    def compute_output_shape(self, input_shape):
+        input_shape = tf.TensorShape(input_shape)
+        input_shape = input_shape.with_rank_at_least(2)
+        if input_shape[-1].value is None:
+            raise ValueError(
+                'The innermost dimension of input_shape must be defined, but saw: %s'
+                % input_shape)
+        return input_shape[:-1].concatenate(self.vocab_size)
+
+    def call(self, inputs, **kwargs):
+        # batch_size = tf.shape(inputs)[0]
+        # beam_width = inputs.shape[1]
+
+        vocab_query_pos = self.vocab_projection_pos(inputs)
+        vocab_query_neg = self.vocab_projection_neg(inputs)
+
+        vocab_logit_pos = tf.nn.relu(tf.matmul(vocab_query_pos, tf.transpose(self.embedding)))
+        vocab_logit_neg = tf.nn.relu(tf.matmul(vocab_query_neg, tf.transpose(self.embedding)))
+
+        logits = vocab_logit_pos - vocab_logit_neg
+
+        return logits
+
+
 def create_decoder_cell(agenda, extended_base_words, oov, base_sent_hiddens, mev_st, mev_ts,
                         base_length, iw_length, dw_length,
                         vocab_size, attn_dim, hidden_dim, num_layer,
                         enable_alignment_history=False, enable_dropout=False, dropout_keep=1.,
                         no_insert_delete_attn=False, beam_width=None):
-    batch_size = tf.shape(base_sent_hiddens)[0]
-
     base_attn = seq2seq.BahdanauAttention(attn_dim, base_sent_hiddens, base_length, name='src_attn')
 
     cnx_src, micro_evs_st = mev_st
@@ -246,12 +279,11 @@ def create_decoder_cell(agenda, extended_base_words, oov, base_sent_hiddens, mev
     decoder_cell = AttentionAugmentRNNCell(all_cells)
     decoder_cell.set_agenda(agenda)
 
-    zero_state = create_trainable_zero_state(decoder_cell, batch_size, beam_width=beam_width)
+    output_layer = DecoderOutputLayer(
+        vocab.get_embeddings(),
+        beam_decoder=beam_width is not None
+    )
 
-    beam_decoder = beam_width is not None
-    output_layer = DecoderOutputLayer(vocab.get_embeddings(), beam_decoder=beam_decoder)
-
-    # max_oov_length = tf.shape(oov)[-1]
     copy_net_cell = CopyNetWrapper(
         decoder_cell,
         extended_base_words,
@@ -262,7 +294,16 @@ def create_decoder_cell(agenda, extended_base_words, oov, base_sent_hiddens, mev
         name='CopyNetWrapper'
     )
 
-    zero_state = copy_net_cell.zero_state(batch_size, tf.float32).clone(cell_state=zero_state)
+    if beam_width:
+        true_batch_size = tf.cast(tf.shape(base_sent_hiddens)[0] / beam_width, tf.int32)
+    else:
+        true_batch_size = tf.shape(base_sent_hiddens)[0]
+
+    cell_zero_state = create_trainable_zero_state(decoder_cell, true_batch_size, beam_width=beam_width)
+    if beam_width:
+        zero_state = copy_net_cell.zero_state(cell_zero_state, true_batch_size * beam_width)
+    else:
+        zero_state = copy_net_cell.zero_state(cell_zero_state, true_batch_size)
 
     return copy_net_cell, zero_state
 
@@ -296,24 +337,51 @@ def create_trainable_zero_state(decoder_cell, batch_size, beam_width=None):
 
 
 def create_embedding_fn(vocab_size):
-    def fn(ids):
-        orig_ids = tf.cast(ids, tf.int64)
+    def fn(orig_ids):
+        orig_ids = tf.cast(orig_ids, tf.int64)
 
-        ids = tf.where(
+        in_vocab_ids = tf.where(
             tf.less(orig_ids, vocab_size),
-            orig_ids, tf.ones_like(orig_ids) * vocab.get_token_id(vocab.UNKNOWN_TOKEN)
+            orig_ids,
+            tf.ones_like(orig_ids) * vocab.OOV_TOKEN_ID
         )
-        embeds = vocab.embed_tokens(ids)
+        embeds = vocab.embed_tokens(in_vocab_ids)
 
-        orig_ids = tf.where(
+        last_ids = tf.where(
             tf.equal(orig_ids, vocab.get_token_id(vocab.START_TOKEN)),
             tf.ones_like(orig_ids) * -1,
             orig_ids
         )
+        last_ids = tf.cast(tf.expand_dims(last_ids, 1), tf.float32)
 
-        inputs = tf.concat([embeds, tf.cast(tf.expand_dims(orig_ids, 1), tf.float32)], axis=1)
+        cell_input = tf.concat([embeds, last_ids], axis=1)
 
-        return inputs
+        return cell_input
+
+    return fn
+
+
+def create_embedding_fn_beam_decoder(vocab_size):
+    def fn(orig_ids):
+        orig_ids = tf.cast(orig_ids, tf.int64)
+
+        in_vocab_ids = tf.where(
+            tf.less(orig_ids, vocab_size),
+            orig_ids,
+            tf.ones_like(orig_ids) * vocab.OOV_TOKEN_ID
+        )
+        embeds = vocab.embed_tokens(in_vocab_ids)
+
+        last_ids = tf.where(
+            tf.equal(orig_ids, vocab.get_token_id(vocab.START_TOKEN)),
+            tf.ones_like(orig_ids) * -1,
+            orig_ids
+        )
+        last_ids = tf.cast(tf.expand_dims(last_ids, 2), tf.float32)
+
+        cell_input = tf.concat([embeds, last_ids], axis=2)
+
+        return cell_input
 
     return fn
 
@@ -323,10 +391,12 @@ def train_decoder(agenda, embeddings, extended_base_words, oov,
                   dec_input_lengths, base_length, iw_length, dw_length,
                   vocab_size, attn_dim, hidden_dim, num_layer, swap_memory, enable_dropout=False, dropout_keep=1.,
                   no_insert_delete_attn=False):
-    with tf.variable_scope(OPS_NAME, 'decoder', []):
+    with tf.variable_scope(OPS_NAME, 'decoder'):
         dec_input_embeds = vocab.embed_tokens(dec_inputs)
-        inputs = tf.concat([dec_input_embeds, tf.cast(tf.expand_dims(dec_extended_inputs, 2), tf.float32)], axis=2)
-        helper = seq2seq.TrainingHelper(inputs, dec_input_lengths, name='train_helper')
+        last_ids = tf.cast(tf.expand_dims(dec_extended_inputs, 2), tf.float32)
+        cell_input = tf.concat([dec_input_embeds, last_ids], axis=2)
+
+        helper = seq2seq.TrainingHelper(cell_input, dec_input_lengths, name='train_helper')
 
         cell, zero_states = create_decoder_cell(
             agenda, extended_base_words, oov,
@@ -380,51 +450,50 @@ def greedy_eval_decoder(agenda, embeddings, extended_base_words, oov,
         return outputs, state, lengths
 
 
-# def beam_eval_decoder(agenda, embeddings, start_token_id, stop_token_id,
-#                       base_sent_hiddens, insert_word_embeds, delete_word_embeds,
-#                       base_length, iw_length, dw_length,
-#                       attn_dim, hidden_dim, num_layer, maximum_iterations, beam_width, swap_memory,
-#                       enable_dropout=False, dropout_keep=1., no_insert_delete_attn=False):
-#     with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
-#         true_batch_size = tf.shape(base_sent_hiddens)[0]
-#
-#         tiled_agenda = seq2seq.tile_batch(agenda, beam_width)
-#
-#         tiled_base_sent = seq2seq.tile_batch(base_sent_hiddens, beam_width)
-#         tiled_insert_embeds = seq2seq.tile_batch(insert_word_embeds, beam_width)
-#         tiled_delete_embeds = seq2seq.tile_batch(delete_word_embeds, beam_width)
-#
-#         tiled_src_lengths = seq2seq.tile_batch(base_length, beam_width)
-#         tiled_iw_lengths = seq2seq.tile_batch(iw_length, beam_width)
-#         tiled_dw_lengths = seq2seq.tile_batch(dw_length, beam_width)
-#
-#         start_token_id = tf.cast(start_token_id, tf.int32)
-#         stop_token_id = tf.cast(stop_token_id, tf.int32)
-#
-#         cell = create_decoder_cell(
-#             tiled_agenda,
-#             tiled_base_sent, tiled_insert_embeds, tiled_delete_embeds,
-#             tiled_src_lengths, tiled_iw_lengths, tiled_dw_lengths,
-#             attn_dim, hidden_dim, num_layer,
-#             enable_dropout=enable_dropout, dropout_keep=dropout_keep,
-#             no_insert_delete_attn=no_insert_delete_attn
-#         )
-#
-#         output_layer = DecoderOutputLayer(embeddings, beam_decoder=True)
-#         zero_states = create_trainable_zero_state(cell, true_batch_size, beam_width)
-#
-#         decoder = seq2seq.BeamSearchDecoder(
-#             cell,
-#             embeddings,
-#             tf.fill([true_batch_size], start_token_id),
-#             stop_token_id,
-#             zero_states,
-#             beam_width=beam_width,
-#             output_layer=output_layer,
-#             length_penalty_weight=0.0
-#         )
-#
-#         return seq2seq.dynamic_decode(decoder, maximum_iterations=maximum_iterations, swap_memory=swap_memory)
+def beam_eval_decoder(agenda, embeddings, extended_base_words, oov,
+                      start_token_id, stop_token_id,
+                      base_sent_hiddens, insert_word_embeds, delete_word_embeds,
+                      base_length, iw_length, dw_length,
+                      vocab_size, attn_dim, hidden_dim, num_layer, max_sentence_length, beam_width, swap_memory,
+                      enable_dropout=False, dropout_keep=1., no_insert_delete_attn=False):
+    with tf.variable_scope(OPS_NAME, 'decoder', reuse=True):
+        true_batch_size = tf.shape(base_sent_hiddens)[0]
+
+        tiled_agenda = seq2seq.tile_batch(agenda, beam_width)
+        tiled_extended_base_words = seq2seq.tile_batch(extended_base_words, beam_width)
+        tiled_oov = seq2seq.tile_batch(oov, beam_width)
+
+        tiled_base_sent = seq2seq.tile_batch(base_sent_hiddens, beam_width)
+        tiled_insert_embeds = seq2seq.tile_batch(insert_word_embeds, beam_width)
+        tiled_delete_embeds = seq2seq.tile_batch(delete_word_embeds, beam_width)
+
+        tiled_src_lengths = seq2seq.tile_batch(base_length, beam_width)
+        tiled_iw_lengths = seq2seq.tile_batch(iw_length, beam_width)
+        tiled_dw_lengths = seq2seq.tile_batch(dw_length, beam_width)
+
+        start_token_id = tf.cast(start_token_id, tf.int32)
+        stop_token_id = tf.cast(stop_token_id, tf.int32)
+
+        cell, zero_states = create_decoder_cell(
+            tiled_agenda, tiled_extended_base_words, tiled_oov,
+            tiled_base_sent, tiled_insert_embeds, tiled_delete_embeds,
+            tiled_src_lengths, tiled_iw_lengths, tiled_dw_lengths,
+            vocab_size, attn_dim, hidden_dim, num_layer,
+            enable_dropout=enable_dropout, dropout_keep=dropout_keep,
+            no_insert_delete_attn=no_insert_delete_attn, beam_width=beam_width
+        )
+
+        decoder = seq2seq.BeamSearchDecoder(
+            cell,
+            create_embedding_fn_beam_decoder(vocab_size),
+            tf.fill([true_batch_size], start_token_id),
+            stop_token_id,
+            zero_states,
+            beam_width=beam_width,
+            length_penalty_weight=0.0
+        )
+
+        return seq2seq.dynamic_decode(decoder, maximum_iterations=max_sentence_length, swap_memory=swap_memory)
 
 
 def str_tokens(decoder_output, vocab_i2s, vocab_size, oov):
@@ -438,7 +507,12 @@ def str_tokens(decoder_output, vocab_i2s, vocab_size, oov):
     batch_nums = tf.tile(batch_nums, [1, max_sent_len])  # shape (batch_size, max_sent_len)
 
     oov_ids = tf.maximum(0, sample_ids - vocab_size)
-    oov_ids = tf.stack((batch_nums, oov_ids), axis=2)  # shape (batch_size, max_sent_len, 2)
+    if isinstance(decoder_output[0], FinalBeamSearchDecoderOutput):
+        beam_width = tf.shape(oov_ids)[-1]
+        batch_nums = tf.tile(tf.expand_dims(batch_nums, 2), [1, 1, beam_width])
+        oov_ids = tf.stack([batch_nums, oov_ids], axis=3)
+    else:
+        oov_ids = tf.stack([batch_nums, oov_ids], axis=2)  # shape (batch_size, max_sent_len, 2)
 
     oov_tokens = tf.gather_nd(oov, oov_ids)
     lookup = vocab_i2s.lookup(tf.to_int64(sample_id(decoder_output)))

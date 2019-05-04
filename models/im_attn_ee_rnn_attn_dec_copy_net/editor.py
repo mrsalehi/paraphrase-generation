@@ -109,12 +109,13 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
                                           no_insert_delete_attn=no_insert_delete_attn)
 
     if use_beam_decoder:
-        infr_decoder = decoder.beam_eval_decoder(base_agenda, embeddings,
+        infr_decoder = decoder.beam_eval_decoder(base_agenda, embeddings, extended_base_words, oov,
                                                  vocab.get_token_id(vocab.START_TOKEN),
                                                  vocab.get_token_id(vocab.STOP_TOKEN),
                                                  base_sent_hidden_states, wa_inserted, wa_deleted,
                                                  base_len, src_len, tgt_len,
-                                                 attn_dim, hidden_dim, num_decoder_layers, max_sent_length, beam_width,
+                                                 vocab_size, attn_dim, hidden_dim,
+                                                 num_decoder_layers, max_sent_length, beam_width,
                                                  swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                                  no_insert_delete_attn=no_insert_delete_attn)
     else:
@@ -123,8 +124,8 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
                                                    vocab.get_token_id(vocab.STOP_TOKEN),
                                                    base_sent_hidden_states, wa_inserted, wa_deleted,
                                                    base_len, src_len, tgt_len,
-                                                   vocab_size, attn_dim, hidden_dim, num_decoder_layers,
-                                                   max_sent_length,
+                                                   vocab_size, attn_dim, hidden_dim,
+                                                   num_decoder_layers, max_sent_length,
                                                    swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                                    no_insert_delete_attn=no_insert_delete_attn)
 
