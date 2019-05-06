@@ -173,8 +173,8 @@ class DecoderOutputLayer(tf.layers.Layer):
         self.vocab_size = embedding.shape[0]
 
         self.embedding = embedding
-        self.vocab_projection_pos = tf.layers.Dense(self.embed_dim, name='vocab_projection_pos')
-        self.vocab_projection_neg = tf.layers.Dense(self.embed_dim, name='vocab_projection_neg')
+        self.vocab_projection_pos = tf.layers.Dense(self.embed_dim)
+        self.vocab_projection_neg = tf.layers.Dense(self.embed_dim)
 
         self.beam_decoder = beam_decoder
 
