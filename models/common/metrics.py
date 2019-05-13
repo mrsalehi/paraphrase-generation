@@ -21,11 +21,11 @@ def bleu(reference, predict):
 
     # TODO(kelvin): is this quite right?
     # use a maximum of 4-grams. If 4-grams aren't present, use only lower n-grams.
-    n = min(4, len(reference), len(predict))
-    if n == 0:
-        return 0.0
-    weights = tuple([1. / n] * n)  # uniform weight on n-gram precisions
-    return bleu_score.sentence_bleu([reference], predict, weights)
+    # n = min(4, len(reference), len(predict))
+    # if n == 0:
+    #     return 0.0
+    # weights = tuple([1. / n] * n)  # uniform weight on n-gram precisions
+    return bleu_score.sentence_bleu([reference], predict, [0.5, 0.5])
 
 
 def remove_start_end_tokens(token_lst, token_length, start_token, end_token):
