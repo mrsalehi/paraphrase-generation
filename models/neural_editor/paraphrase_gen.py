@@ -65,8 +65,9 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
         checkpoint_path=checkpoint_path
     )
 
-    plan2paraphrase = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
-    plan2attn_weight = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
+    # plan2paraphrase = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
+    plan2paraphrase = [[None for _ in evs] for b,evs in plans]
+    plan2attn_weight = [[None for _ in evs] for b,evs in plans]
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
