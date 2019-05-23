@@ -29,6 +29,7 @@ def decoder_outputs_to_edit_vector(decoder_output, temperature_starter, decay_ra
         tf.summary.scalar('temperature', temperature, ['extra'])
 
         outputs = decoder.rnn_output(decoder_output)  # [b x t x V]
+        outputs = tf.where(tf.less_equal(outputs, 0), tf.ones_like(outputs) * 1e-10, outputs)
         dist = tfd.RelaxedOneHotCategorical(temperature, probs=outputs)
         outputs_one_hot = dist.sample()
 
