@@ -3,8 +3,8 @@ import tensorflow as tf
 import models.common.sequence as seq
 from models.common import vocab
 from models.im_aeradp_rec_loss import optimizer
+from models.im_aeradp_rec_loss_from_dec import decoder
 from models.im_attn_ee_rnn_attn_dec.edit_encoder import attn_encoder
-from models.im_attn_ee_rnn_attn_dec_pg import decoder
 from models.im_pg_rec_loss_from_dec import reconstruction
 from models.neural_editor import agenda as agn
 from models.neural_editor import encoder
