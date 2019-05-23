@@ -33,6 +33,11 @@ editor {
     wvec_path = glove.6B.300d_dbpedia.txt
 
     reconstruction_dense_layers = [192]
+    recons_temp {
+        starter = 0.9
+        decay_rate = 0.6
+        decay_steps = 10000
+    }
 
     edit_enc {
         ctx_hidden_dim = 256
