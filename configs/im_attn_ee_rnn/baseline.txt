@@ -32,6 +32,8 @@ editor {
     use_beam_decoder = True
     wvec_path = glove.6B.300d_dbpedia.txt
 
+    reconstruction_dense_layers = [192]
+
     edit_enc {
         ctx_hidden_dim = 256
         ctx_hidden_layer = 3
