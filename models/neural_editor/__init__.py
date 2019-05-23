@@ -91,7 +91,12 @@ def train(config, data_dir, my_model_fn=model_fn):
     else:
         hooks = []
 
-    hooks += [tf_debug.TensorBoardDebugHook('localhost:6068', send_traceback_and_source_code=False)]
+    if config.get('eval.debug.tensorboard', False):
+        hooks += [tf_debug.TensorBoardDebugHook('localhost:%s' % config.get('eval.debug.tensorboard_port', 6068),
+                                                send_traceback_and_source_code=False)]
+
+    if config.get('eval.debug.cli', False):
+        hooks = [tf_debug.LocalCLIDebugHook()]
 
     return estimator.train(
         input_fn=lambda: train_input_fn(config, data_dir, vocab.create_vocab_lookup_tables(V)),
