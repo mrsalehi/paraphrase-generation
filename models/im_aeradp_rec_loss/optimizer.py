@@ -35,6 +35,7 @@ def add_reconst_loss(original, reconstructed):
     loss = tf.reduce_sum(diff, axis=1)
     loss = tf.reduce_mean(loss)
 
+    tf.summary.scalar('reconstruction_loss', loss, ['extra'])
     tf.losses.add_loss(loss)
 
     return loss
