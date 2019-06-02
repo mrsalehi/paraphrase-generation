@@ -362,3 +362,7 @@ def seq_length(decoder_output):
         return decoder_output[1].lengths
 
     return decoder_output[2]
+
+
+def last_hidden_state(decoder_output):
+    return decoder_output[1]
