@@ -12,11 +12,15 @@ def decoder_outputs_to_edit_vector(decoder_output, temperature_starter, decay_ra
                                    edit_dim, enc_hidden_dim, enc_num_layers, dense_layers,
                                    swap_memory):
     with tf.variable_scope(OPS_NAME):
+        # [VOCAB x word_dim]
         embeddings = vocab.get_embeddings()
 
+        # Extend embedding matrix to support oov tokens
         unk_id = vocab.get_token_id(vocab.UNKNOWN_TOKEN)
         unk_embed = tf.expand_dims(vocab.embed_tokens(unk_id), 0)
         unk_embeddings = tf.tile(unk_embed, [50, 1])
+
+        # [VOCAB+50 x word_dim]
         embeddings_extended = tf.concat([embeddings, unk_embeddings], axis=0)
 
         global_step = tf.train.get_global_step()
@@ -26,27 +30,39 @@ def decoder_outputs_to_edit_vector(decoder_output, temperature_starter, decay_ra
             decay_steps, decay_rate,
             name='temperature'
         )
-        tf.summary.scalar('temperature', temperature, ['extra'])
+        tf.summary.scalar('temper', temperature, ['extra'])
 
-        outputs = decoder.rnn_output(decoder_output)  # [b x t x V]
+        # [batch x max_len x VOCAB+50], softmax probabilities
+        outputs = decoder.rnn_output(decoder_output)
+
+        # substitute values less than 0 for numerical stability
         outputs = tf.where(tf.less_equal(outputs, 0), tf.ones_like(outputs) * 1e-10, outputs)
+
+        # convert softmax probabilities to one_hot vectors
         dist = tfd.RelaxedOneHotCategorical(temperature, probs=outputs)
+
+        # [batch x max_len x VOCAB+50], one_hot
         outputs_one_hot = dist.sample()
 
+        # [batch x max_len x word_dim], one_hot^T * embedding_matrix
         outputs_embed = tf.einsum("btv,vd-> btd", outputs_one_hot, embeddings_extended)
-        lengths = decoder.seq_length(decoder_output)
 
-        hidden_states, seq_embedding = encoder.source_sent_encoder(
+        # [batch]
+        outputs_length = decoder.seq_length(decoder_output)
+
+        # [batch x max_len x hidden], [batch x hidden]
+        hidden_states, sentence_embedding = encoder.source_sent_encoder(
             outputs_embed,
-            lengths,
+            outputs_length,
             enc_hidden_dim, enc_num_layers,
             use_dropout=False, dropout_keep=1.0, swap_memory=swap_memory
         )
 
-        h = seq_embedding
+        h = sentence_embedding
         for l in dense_layers:
             h = tf.layers.dense(h, l, activation='relu', name='hidden_%s' % (l))
 
+        # [batch x edit_dim]
         edit_vector = tf.layers.dense(h, edit_dim, activation=None, name='linear')
 
     return edit_vector
