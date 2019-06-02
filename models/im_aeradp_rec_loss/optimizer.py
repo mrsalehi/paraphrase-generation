@@ -22,6 +22,8 @@ def loss(dec_output, gold_rnn_output, lengths):
         crossent = -tf.log(probs)
         final_loss = tf.reduce_sum(crossent * mask) / tf.to_float(batch_size)
 
+        tf.summary.scalar('original_loss', loss, ['extra'])
+
         extra_losses = tf.losses.get_losses()
         extra_losses = sum(extra_losses)
 
