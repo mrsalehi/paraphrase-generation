@@ -39,6 +39,20 @@ editor {
         decay_steps = 10000
     }
 
+    reconstruction {
+        agenda = 64
+
+        encoder {
+            hidden = 128
+            layers = 2
+        }
+
+        decoder {
+            hidden = 128
+            layers = 2
+        }
+    }
+
     edit_enc {
         ctx_hidden_dim = 256
         ctx_hidden_layer = 3
