@@ -210,12 +210,15 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     elif mode == tf.estimator.ModeKeys.PREDICT:
         lengths = decoder.seq_length(infer_decoder_output)
         tokens = decoder.str_tokens(infer_decoder_output, vocab_i2s, vocab_size, oov)
+        attns_weight = tf.get_collection('attns_weight')
 
         preds = {
             'str_tokens': tokens,
             'sample_id': decoder.sample_id(infer_decoder_output),
             'lengths': lengths,
             'joined': metrics.join_tokens(tokens, lengths),
+            'attns_weight_0': attns_weight[0],
+            'attns_weight_1': attns_weight[1]
         }
 
         return tf.estimator.EstimatorSpec(
