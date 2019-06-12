@@ -15,17 +15,19 @@ class EditNoiser:
         return self._noise(example)
 
     def dropout_split(self, word_list):
-        pr_list = [1.0 - self.attend_pr, self.attend_pr]
-        if len(word_list) > 0:
-            num_sampled = np.random.choice(np.arange(len(pr_list)), 1, p=pr_list)
-            num_sampled = min(num_sampled, len(word_list))
-            choice_index = np.random.choice(np.arange(len(word_list)), num_sampled, replace=False)
-            mask = np.zeros(len(word_list), dtype=bool)
-            mask[choice_index] = True
-            warray = np.array(word_list)
-            return (warray[mask]).tolist(), (warray[np.invert(mask)]).tolist()
-        else:
-            return [], []
+        if len(word_list) == 0:
+            return []
+
+        pr_list = self.attend_pr
+        num_sampled = np.argmax(np.random.multinomial(1, pr_list)) + 1
+        num_sampled = min(num_sampled, len(word_list))
+        choice_index = np.random.choice(np.arange(len(word_list)), num_sampled, replace=False)
+
+        mask = np.zeros(len(word_list), dtype=bool)
+        mask[choice_index] = True
+
+        warray = np.array(word_list)
+        return (warray[mask]).tolist(), (warray[np.invert(mask)]).tolist()
 
     def _noise(self, ex):
         """Return a noisy EditExample.
@@ -43,9 +45,9 @@ class EditNoiser:
         if ident_map:
             return (src_words, [], [], tgt_words)
         else:
-            insert_exact, insert_approx = self.dropout_split(insert_words)
-            delete_exact, delete_approx = self.dropout_split(delete_words)
-            return (src_words, tgt_words, insert_approx, delete_approx)
+            src_approx, removed_src_words = self.dropout_split(src_words)
+            tgt_approx, removed_tgt_words = self.dropout_split(tgt_words)
+            return (src_approx, tgt_approx, insert_words, delete_words)
 
     @classmethod
     def from_config(cls, config):
