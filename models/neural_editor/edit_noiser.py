@@ -27,7 +27,7 @@ class EditNoiser:
         mask[choice_index] = True
 
         warray = np.array(word_list)
-        return (warray[mask]).tolist(), (warray[np.invert(mask)]).tolist()
+        return warray[np.invert(mask)].tolist(), warray[mask].tolist()
 
     def _noise(self, ex):
         """Return a noisy EditExample.
@@ -43,7 +43,7 @@ class EditNoiser:
         src_words, tgt_words, insert_words, delete_words = ex
         ident_map = np.random.binomial(1, self.ident_pr)
         if ident_map:
-            return (src_words, [], [], tgt_words)
+            return ex
         else:
             src_approx, removed_src_words = self.dropout_split(src_words)
             tgt_approx, removed_tgt_words = self.dropout_split(tgt_words)
@@ -57,3 +57,13 @@ class EditNoiser:
             noiser = None
 
         return noiser
+
+
+if __name__ == '__main__':
+    s = "How do I gain healthy weight without eating junk ?".split()
+    t = "How do I gain weight healthily without getting fat ?".split()
+
+    en = EditNoiser(0, [0.9, 0.1])
+    ex = en((s, t, [], []))
+
+    print(ex)
