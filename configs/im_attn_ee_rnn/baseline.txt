@@ -62,6 +62,35 @@ editor {
         meve_hidden_layer = 1
         num_heads = 4
         micro_ev_dim = 128
+
+        transformer {
+            # Model params
+            initializer_gain = 1.0  # Used in trainable variable initialization.
+            hidden_size = 128  # Model dimension in the hidden layers.
+            num_hidden_layers = 4  # Number of layers in the encoder and decoder stacks.
+            num_heads = 4  # Number of heads to use in multi-headed attention.
+            filter_size = 256  # Inner layer dimension in the feedforward network.
+            pos_encoding_dim = 64
+
+            # Dropout values (only used when training)
+            enable_dropout = True
+            layer_postprocess_dropout = 0.1
+            attention_dropout = 0.1
+            relu_dropout = 0.1
+
+            # Training params
+            label_smoothing = 0.1
+            learning_rate = 2.0
+            learning_rate_decay_rate = 1.0
+            learning_rate_warmup_steps = 16000
+
+            # Optimizer params
+            optimizer_adam_beta1 = 0.9
+            optimizer_adam_beta2 = 0.997
+            optimizer_adam_epsilon = 1e-09
+
+            allow_ffn_pad=True
+        }
     }
 }
 
