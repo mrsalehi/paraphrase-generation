@@ -61,7 +61,7 @@ class EmbeddingSharedWeights(tf.layers.Layer):
     """
         with tf.name_scope("embedding"):
             # Create binary mask of size [batch_size, length]
-            mask = tf.to_float(tf.not_equal(x, 0))
+            mask = self.mask(x)
 
             if self.method == "gather":
                 embeddings = tf.gather(self.shared_weights, x)
@@ -71,6 +71,10 @@ class EmbeddingSharedWeights(tf.layers.Layer):
             embeddings *= self.hidden_size ** 0.5
 
             return embeddings
+
+    def mask(self, x):
+        mask = tf.to_float(tf.not_equal(x, 0))
+        return mask
 
     def linear(self, x):
         """Computes logits by running x through a linear layer.
