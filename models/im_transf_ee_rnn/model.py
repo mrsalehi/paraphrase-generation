@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.metrics as tf_metrics
 
-from models.im_attn_ee_rnn_attn_dec_pg.model import add_extra_summary, get_extra_summary_logger
+from models.im_attn_ee_rnn_attn_dec_pg.model import add_extra_summary, get_extra_summary_logger, add_decoder_attention
 from models.neural_editor.model import get_profiler_hook, ES_BLEU, get_train_extra_summary_writer
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -115,6 +115,8 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
             'attns_weight_0': attns_weight[0],
             'attns_weight_1': attns_weight[1]
         }
+
+        add_decoder_attention(config, preds)
 
         return tf.estimator.EstimatorSpec(
             mode,

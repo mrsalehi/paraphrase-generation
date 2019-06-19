@@ -66,8 +66,10 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
     )
 
     # plan2paraphrase = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
-    plan2paraphrase = [[None for _ in evs] for b,evs in plans]
-    plan2attn_weight = [[None for _ in evs] for b,evs in plans]
+    plan2paraphrase = [[None for _ in evs] for b, evs in plans]
+    plan2attn_weight = [[None for _ in evs] for b, evs in plans]
+    plan2dec_base_attn_weight = [[None for _ in evs] for b, evs in plans]
+    plan2dec_mev_attn_weight = [[None for _ in evs] for b, evs in plans]
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
@@ -78,9 +80,15 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
         if 'attns_weight_0' in o and 'attns_weight_1' in o:
             plan2attn_weight[plan_index][edit_index] = (o['attns_weight_0'], o['attns_weight_1'])
 
+        if 'dec_alg_base' in o:
+            plan2dec_base_attn_weight[plan_index][edit_index] = o['dec_alg_base']
+
+        if 'dec_alg_mev' in o:
+            plan2dec_mev_attn_weight[plan_index][edit_index] = o['dec_alg_mev']
+
     assert len(plans) == len(plan2paraphrase)
 
-    return plan2paraphrase, plan2attn_weight
+    return plan2paraphrase, plan2attn_weight, plan2dec_base_attn_weight, plan2dec_mev_attn_weight
 
 
 def save_attn_weights(attn_weights, name):

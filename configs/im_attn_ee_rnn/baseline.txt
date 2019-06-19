@@ -29,7 +29,7 @@ editor {
     use_swap_memory = True
     use_free_set = False
     embed_sentence = False
-    use_beam_decoder = True
+    use_beam_decoder = False
     wvec_path = glove.6B.300d_dbpedia.txt
 
     reconstruction_dense_layers = [192]

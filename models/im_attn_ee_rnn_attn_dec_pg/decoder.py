@@ -200,6 +200,9 @@ def create_decoder_cell(agenda, extended_base_words, oov, base_sent_hiddens, mev
 
         attns += [mev_ts_attn]
 
+    is_training = tf.get_collection('is_training')[0]
+    enable_alignment_history = not is_training
+
     bottom_cell = tf_rnn.LSTMCell(hidden_dim, name='bottom_cell')
     bottom_attn_cell = seq2seq.AttentionWrapper(
         bottom_cell,

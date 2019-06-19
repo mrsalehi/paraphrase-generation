@@ -221,7 +221,19 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
             'attns_weight_1': attns_weight[1]
         }
 
+        add_decoder_attention(config, preds)
+
         return tf.estimator.EstimatorSpec(
             mode,
             predictions=preds
         )
+
+
+def add_decoder_attention(config, preds):
+    if not config.editor.get('use_beam_decoder', False):
+        alignment_history = tf.get_collection('decoder_alignment_history')[0]
+        if len(alignment_history) > 0:
+            preds['dec_alg_base'] = alignment_history[0]
+
+        if len(alignment_history) > 1:
+            preds['dec_alg_mev'] = alignment_history[1]

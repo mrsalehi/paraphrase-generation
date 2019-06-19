@@ -10,6 +10,16 @@ from models.neural_editor.decoder import prepare_decoder_inputs, prepare_decoder
 from models.neural_editor.edit_encoder import random_noise_encoder
 
 
+def add_decoder_attn_history_graph(decoder_output):
+    is_training = tf.get_collection('is_training')[0]
+    if is_training:
+        return
+
+    alignment_history = decoder.alignment_history(decoder_output)
+    alignment_history = list(map(lambda x: tf.transpose(x.stack(), [1, 0, 2]), alignment_history))
+    tf.add_to_collection('decoder_alignment_history', alignment_history)
+
+
 def prepare_decoder_input_output(words, words_extended, length):
     """
     Args:
@@ -128,6 +138,8 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
                                                    num_decoder_layers, max_sent_length,
                                                    swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                                    no_insert_delete_attn=no_insert_delete_attn)
+
+        add_decoder_attn_history_graph(infr_decoder)
 
     return train_decoder, infr_decoder, train_dec_out, train_dec_out_len
 

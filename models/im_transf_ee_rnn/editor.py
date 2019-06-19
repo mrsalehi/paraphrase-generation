@@ -3,7 +3,7 @@ import tensorflow as tf
 import models.common.sequence as seq
 from models.common import vocab
 from models.im_attn_ee_rnn_attn_dec_pg import decoder
-from models.im_attn_ee_rnn_attn_dec_pg.editor import prepare_decoder_input_output
+from models.im_attn_ee_rnn_attn_dec_pg.editor import prepare_decoder_input_output, add_decoder_attn_history_graph
 from models.im_transf_ee_rnn.edit_encoder import attn_encoder
 from models.neural_editor import agenda as agn
 from models.neural_editor import encoder
@@ -102,6 +102,8 @@ def editor_train(base_words, extended_base_words, output_words, extended_output_
                                                    num_decoder_layers, max_sent_length,
                                                    swap_memory, enable_dropout=use_dropout, dropout_keep=dropout_keep,
                                                    no_insert_delete_attn=no_insert_delete_attn)
+
+        add_decoder_attn_history_graph(infr_decoder)
 
     return train_decoder, infr_decoder, train_dec_out, train_dec_out_len
 
