@@ -40,3 +40,8 @@ def get_dict_from_collection(collection_name):
     keys = tf.get_collection(key_collection)
     values = tf.get_collection(value_collection)
     return dict(zip(keys, values))
+
+
+def is_training():
+    training = tf.get_collection('is_training')[0]
+    return training

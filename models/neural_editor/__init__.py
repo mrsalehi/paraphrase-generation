@@ -61,11 +61,15 @@ def get_estimator(config, embed_matrix, my_model_fn=model_fn):
 
 
 def train(config, data_dir, my_model_fn=model_fn):
-    V, embed_matrix = vocab.read_word_embeddings(
-        data_dir / 'word_vectors' / config.editor.wvec_path,
-        config.editor.word_dim,
-        config.editor.vocab_size
-    )
+    if config.editor.get('use_sub_words', False):
+        V, embed_matrix = vocab.read_subword_embeddings(config)
+    else:
+        V, embed_matrix = vocab.read_word_embeddings(
+            data_dir / 'word_vectors' / config.editor.wvec_path,
+            config.editor.word_dim,
+            config.editor.vocab_size,
+            random_initialization=(not config.editor.get('use_pretrained_embeddings', True))
+        )
 
     estimator = get_estimator(config, embed_matrix, my_model_fn)
 

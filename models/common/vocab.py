@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.lookup as lookup
+from bpemb import BPEmb
 
 from models.common import graph_utils
 
@@ -48,7 +49,8 @@ def get_special_tokens_embeds(embeddings):
 def read_word_embeddings(file_path, embed_dim,
                          vocab_size=None,
                          include_special_tokens=True,
-                         special_tokens=None):
+                         special_tokens=None,
+                         random_initialization=False):
     if special_tokens is None:
         special_tokens = SPECIAL_TOKENS
 
@@ -77,6 +79,9 @@ def read_word_embeddings(file_path, embed_dim,
     if vocab_size is None:
         vocab_size = len(embeds)
 
+    if random_initialization:
+        return vocab, np.random.normal(0, embed_dim ** -0.5, (vocab_size, embed_dim))
+
     embedding_matrix = np.stack(embeds)
     assert embedding_matrix.shape == (vocab_size, embed_dim)
 
@@ -86,6 +91,33 @@ def read_word_embeddings(file_path, embed_dim,
         assert embedding_matrix.shape == (vocab_size + len(SPECIAL_TOKENS), embed_dim)
 
     return vocab, embedding_matrix
+
+
+def read_subword_embeddings(config):
+    word_dim = config.editor.word_dim
+
+    bpemb = get_bpemb_instance(config)
+    V = [PAD_TOKEN] + bpemb.pieces
+
+    global START_TOKEN
+    global STOP_TOKEN
+
+    START_TOKEN = bpemb.BOS_str
+    STOP_TOKEN = bpemb.EOS_str
+
+    if not config.editor.get('use_pretrained_embeddings', True):
+        embedding_matrix = np.random.normal(0, word_dim ** -0.5, (len(V), word_dim))
+        embedding_matrix[0] = np.zeros((word_dim,), dtype=np.float32)
+        return V, embedding_matrix
+
+    pad_embedding = np.zeros((1, word_dim), np.float32)
+    embedding_matrix = np.concatenate([
+        pad_embedding, bpemb.vectors
+    ], axis=0)
+
+    assert embedding_matrix.shape == (len(V), word_dim)
+
+    return V, embedding_matrix
 
 
 def get_vocab_lookup(vocab, name=None, reuse=None):
@@ -161,3 +193,10 @@ def get_embeddings():
 def embed_tokens(ids):
     embeddings = get_embeddings()
     return tf.nn.embedding_lookup(embeddings, ids)
+
+
+def get_bpemb_instance(config) -> BPEmb:
+    if config.editor.get('use_pretrained_embeddings', True):
+        return BPEmb(lang='en', vs=config.editor.vocab_size, dim=config.editor.word_dim, vs_fallback=False)
+    else:
+        return BPEmb(lang='en', vs=config.editor.vocab_size, vs_fallback=False)
