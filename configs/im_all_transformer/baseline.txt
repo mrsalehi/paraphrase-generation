@@ -30,6 +30,10 @@ editor {
         num_heads = 2
         allow_mev_st_attn = True
         allow_mev_ts_attn = False
+
+        max_decode_length = 40
+        beam_size = 5
+        beam_decoding_alpha = 0.6
     }
 
     use_pretrained_embeddings = True

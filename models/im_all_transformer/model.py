@@ -13,7 +13,7 @@ from models.im_all_transformer import editor, decoder, optimizer
 
 def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     if mode == tf.estimator.ModeKeys.PREDICT:
-        base_words, src_words, tgt_words, inserted_words, deleted_words = features
+        base_words, _, src_words, tgt_words, inserted_words, deleted_words = features
         output_words = tgt_words
     else:
         base_words, output_words, src_words, tgt_words, inserted_words, deleted_words = features
@@ -28,7 +28,7 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     vocab.init_embeddings(embedding_matrix)
     EmbeddingSharedWeights.init_from_embedding_matrix()
 
-    logits = editor.editor_train(
+    logits, beam_decoded_ids, beam_decoded_lengths = editor.editor_train(
         base_words, output_words,
         src_words, tgt_words, inserted_words, deleted_words,
         config
@@ -90,23 +90,23 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
             # eval_metric_ops={'bleu': tf_metrics.streaming_mean(ops[ES_BLEU])}
         )
     #
-    # elif mode == tf.estimator.ModeKeys.PREDICT:
-    #     lengths = decoder.seq_length(infer_decoder_output)
-    #     tokens = decoder.str_tokens(infer_decoder_output, vocab_i2s, vocab_size, oov)
-    #     attns_weight = tf.get_collection('attns_weight')
-    #
-    #     preds = {
-    #         'str_tokens': tokens,
-    #         'sample_id': decoder.sample_id(infer_decoder_output),
-    #         'lengths': lengths,
-    #         'joined': metrics.join_tokens(tokens, lengths),
-    #         'attns_weight_0': attns_weight[0],
-    #         'attns_weight_1': attns_weight[1]
-    #     }
-    #
-    #     add_decoder_attention(config, preds)
-    #
-    #     return tf.estimator.EstimatorSpec(
-    #         mode,
-    #         predictions=preds
-    #     )
+    elif mode == tf.estimator.ModeKeys.PREDICT:
+        lengths = beam_decoded_lengths
+        tokens = decoder.str_tokens(beam_decoded_ids)
+        # attns_weight = tf.get_collection('attns_weight')
+
+        preds = {
+            # 'str_tokens': tokens,
+            'decoded_ids': beam_decoded_ids,
+            'lengths': lengths,
+            'joined': metrics.join_tokens(tokens, lengths),
+            # 'attns_weight_0': attns_weight[0],
+            # 'attns_weight_1': attns_weight[1]
+        }
+
+        # add_decoder_attention(config, preds)
+
+        return tf.estimator.EstimatorSpec(
+            mode,
+            predictions=preds
+        )

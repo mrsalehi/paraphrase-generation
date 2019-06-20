@@ -25,6 +25,20 @@ from models.neural_editor import editor, optimizer, decoder, paraphrase_gen
 NAME = 'neural_editor'
 
 
+def get_vocab_embedding_matrix(config, data_dir):
+    if config.editor.get('use_sub_words', False):
+        output = vocab.read_subword_embeddings(config)
+    else:
+        output = vocab.read_word_embeddings(
+            data_dir / 'word_vectors' / config.editor.wvec_path,
+            config.editor.word_dim,
+            config.editor.vocab_size,
+            random_initialization=(not config.editor.get('use_pretrained_embeddings', True))
+        )
+
+    return output
+
+
 def get_eval_hook(estimator, input_fn, name, every_n_steps):
     return InMemoryEvaluatorHook(
         estimator,
@@ -61,16 +75,7 @@ def get_estimator(config, embed_matrix, my_model_fn=model_fn):
 
 
 def train(config, data_dir, my_model_fn=model_fn):
-    if config.editor.get('use_sub_words', False):
-        V, embed_matrix = vocab.read_subword_embeddings(config)
-    else:
-        V, embed_matrix = vocab.read_word_embeddings(
-            data_dir / 'word_vectors' / config.editor.wvec_path,
-            config.editor.word_dim,
-            config.editor.vocab_size,
-            random_initialization=(not config.editor.get('use_pretrained_embeddings', True))
-        )
-
+    V, embed_matrix = get_vocab_embedding_matrix(config, data_dir)
     estimator = get_estimator(config, embed_matrix, my_model_fn)
 
     if config.get('eval.enable', True):
@@ -354,11 +359,7 @@ def augment_debug(config, debug_dataset, data_dir, checkpoint_path=None, my_mode
 
 def generate_paraphrase(config, data_dir, checkpoint_path, plan_path, output_path, beam_width, batch_size,
                         my_model_fn=model_fn):
-    V, embed_matrix = vocab.read_word_embeddings(
-        data_dir / 'word_vectors' / config.editor.wvec_path,
-        config.editor.word_dim,
-        config.editor.vocab_size
-    )
+    V, embed_matrix = get_vocab_embedding_matrix(config, data_dir)
 
     if batch_size:
         config.put('optim.batch_size', batch_size)

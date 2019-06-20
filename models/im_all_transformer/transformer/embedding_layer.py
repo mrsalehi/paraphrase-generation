@@ -42,9 +42,10 @@ class EmbeddingSharedWeights(tf.layers.Layer):
     """
         super(EmbeddingSharedWeights, self).__init__()
         self.embedding_matrix = embedding_matrix
-        self.vocab_size = embedding_matrix.shape[0]
-        self.shared_weights = embedding_matrix
+        self.vocab_size = embedding_matrix.shape[0].value
         self.hidden_size = embedding_matrix.shape[-1].value
+        self.word_dim = self.hidden_size
+        self.shared_weights = embedding_matrix
         if method not in ("gather", "matmul"):
             raise ValueError("method {} must be 'gather' or 'matmul'".format(method))
         self.method = method

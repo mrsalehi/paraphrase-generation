@@ -6,7 +6,7 @@ from tensorflow.contrib.seq2seq import FinalBeamSearchDecoderOutput
 from models.common import sequence, vocab, graph_utils
 from models.common.config import Config
 from models.im_all_transformer.edit_encoder import ProjectedEmbedding
-from models.im_all_transformer.transformer import attention_layer, ffn_layer, model_utils
+from models.im_all_transformer.transformer import attention_layer, ffn_layer, model_utils, beam_search
 from models.im_all_transformer.transformer.embedding_layer import EmbeddingSharedWeights
 from models.im_all_transformer.transformer.transformer import PrePostProcessingWrapper, LayerNormalization
 
@@ -209,6 +209,7 @@ class Decoder(tf.layers.Layer):
 
         # Project embedding to transformer's hidden_size if needed
         embedding_layer = EmbeddingSharedWeights.get_from_graph()
+        self.vocab_size = embedding_layer.vocab_size
         if config.editor.word_dim != self.config.orig_hidden_size:
             self.embedding_layer = ProjectedEmbedding(self.config.orig_hidden_size, embedding_layer)
         else:
@@ -285,6 +286,11 @@ class Decoder(tf.layers.Layer):
 
             return logits
 
+        elif mode == 'predict':
+            decoder_output = self._decode_predict(base_sent_hidden_states, base_sent_attention_bias,
+                                                  edit_vector, mev_st, mev_ts)
+            return decoder_output
+
     def _decode_train(self, decoder_input: tf.Tensor, decoder_input_len: tf.Tensor,
                       base_sent_hidden_states: tf.Tensor, base_sent_attention_bias: tf.Tensor,
                       mev_st: Tuple[tf.Tensor, tf.Tensor, tf.Tensor],
@@ -314,45 +320,125 @@ class Decoder(tf.layers.Layer):
 
             return logits
 
+    def _decode_predict(self, base_sent_hidden_states: tf.Tensor, base_sent_attention_bias: tf.Tensor,
+                        edit_vector: tf.Tensor,
+                        mev_st: Tuple[tf.Tensor, tf.Tensor, tf.Tensor],
+                        mev_ts: Tuple[tf.Tensor, tf.Tensor, tf.Tensor]):
+        with tf.name_scope("decode_predict"):
+            batch_size = tf.shape(base_sent_hidden_states)[0]
 
-def str_tokens(decoder_output, vocab_i2s):
+            symbols_to_logits_fn = self._get_symbols_to_logits_fn(edit_vector)
+
+            # Create initial set of IDs that will be passed into symbols_to_logits_fn.
+            start_id = tf.to_int32(vocab.get_token_id(vocab.START_TOKEN))
+            initial_ids = tf.fill([batch_size], start_id)
+
+            # Create cache storing decoder attention values for each layer.
+            cache = {
+                "layer_%d" % layer: {
+                    "k": tf.zeros([batch_size, 0, self.config.hidden_size]),
+                    "v": tf.zeros([batch_size, 0, self.config.hidden_size]),
+                } for layer in range(self.config.num_hidden_layers)}
+
+            # Add encoder output and attention bias to the cache.
+            cache["encoder_outputs"] = base_sent_hidden_states
+            cache["encoder_attn_bias"] = base_sent_attention_bias
+
+            cache["mev_st"] = mev_st[0]
+            cache['mev_st_keys'] = mev_st[1]
+            cache['mev_st_attn_bias'] = mev_st[2]
+
+            cache['mev_ts'] = mev_ts[0]
+            cache['mev_ts_keys'] = mev_ts[1]
+            cache['mev_ts_attn_bias'] = mev_ts[2]
+
+            # Use beam search to find the top beam_size sequences and scores.
+            decoded_ids, scores = beam_search.sequence_beam_search(
+                symbols_to_logits_fn=symbols_to_logits_fn,
+                initial_ids=initial_ids,
+                initial_cache=cache,
+                vocab_size=self.vocab_size,
+                beam_size=self.config.beam_size,
+                alpha=self.config.beam_decoding_alpha,
+                max_decode_length=self.config.max_decode_length,
+                eos_id=tf.to_int32(vocab.get_token_id(vocab.STOP_TOKEN)))
+
+            # Change decoded_ids from [batch_size, beam_size, max_decode_length]
+            # to [batch, max_decode_length, beam_size]
+            decoded_ids = tf.transpose(decoded_ids, [0, 2, 1])
+            decoded_ids = decoded_ids[:, 1:, :]
+
+            # mask for valid tokens
+            # [batch, max_decode_length, beam_size]
+            mask = tf.to_int32(tf.not_equal(decoded_ids, 0))
+
+            # [batch, beam_size]
+            decoded_lengths = tf.reduce_sum(mask, axis=1)
+
+            return decoded_ids, decoded_lengths, scores
+
+    def _get_symbols_to_logits_fn(self, edit_vector):
+        """Returns a decoding function that calculates logits of the next tokens."""
+        max_decode_length = self.config.max_decode_length
+
+        timing_signal = model_utils.get_position_encoding(
+            max_decode_length + 1,
+            self.config.orig_hidden_size
+        )
+        decoder_self_attention_bias = model_utils.get_decoder_self_attention_bias(max_decode_length)
+
+        def symbols_to_logits_fn(ids, i, cache):
+            """Generate logits for next potential IDs.
+
+            Args:
+              ids: Current decoded sequences.
+                int tensor with shape [batch_size * beam_size, i + 1]
+              i: Loop index
+              cache: dictionary of values storing the encoder output, encoder-decoder
+                attention bias, and previous decoder attention values.
+
+            Returns:
+              Tuple of
+                (logits with shape [batch_size * beam_size, vocab_size],
+                 updated cache values)
+            """
+            # Set decoder input to the last generated IDs
+            decoder_input = ids[:, -1:]
+
+            # Preprocess decoder input by getting embeddings and adding timing signal.
+            decoder_input = self.embedding_layer(decoder_input)
+            decoder_input += timing_signal[i:i + 1]
+
+            # Add edit_vector to decoder_input
+            # [batch, 1, edit_vector_dim]
+            expanded_edit_vector = tf.expand_dims(edit_vector, axis=1)
+            expanded_edit_vector = tf.tile(expanded_edit_vector, [self.config.beam_size, 1, 1])
+
+            # [batch, hidden_size = orig_hidden_size + edit_vector_dim]
+            decoder_input = tf.concat([decoder_input, expanded_edit_vector], axis=-1)
+
+            self_attention_bias = decoder_self_attention_bias[:, :, i:i + 1, :i + 1]
+
+            outputs = self.decoder_stack(
+                decoder_input, self_attention_bias,
+                encoder_outputs=cache["encoder_outputs"], encoder_attn_bias=cache["encoder_attn_bias"],
+                mev_st=cache["mev_st"], mev_st_keys=cache["mev_st_keys"], mev_st_attn_bias=cache["mev_st_attn_bias"],
+                mev_ts=cache["mev_ts"], mev_ts_keys=cache["mev_ts_keys"], mev_ts_attn_bias=cache["mev_ts_attn_bias"],
+                cache=cache
+            )
+
+            # Project transformer outputs to the embedding space
+            outputs = self.project_back(outputs)
+            logits = self.vocab_projection.linear(outputs)
+            logits = tf.squeeze(logits, axis=[1])
+
+            return logits, cache
+
+        return symbols_to_logits_fn
+
+
+def str_tokens(decoded_ids):
+    vocab_i2s = vocab.get_vocab_lookup_tables()[vocab.INT_TO_STR]
     return vocab_i2s.lookup(
-        tf.to_int64(sample_id(decoder_output))
+        tf.to_int64(decoded_ids)
     )
-
-
-def attention_score(decoder_output):
-    final_attention_state = decoder_output[1][0]
-    alignments = final_attention_state.alignment_history
-
-    def convert(t):
-        return tf.transpose(t.stack(), [1, 0, 2])
-
-    if isinstance(alignments, tuple):
-        return tuple([convert(t) for t in alignments])
-
-    return convert(alignments)
-
-
-def rnn_output(decoder_output):
-    output = decoder_output[0].rnn_output
-    return output
-
-
-def sample_id(decoder_output):
-    if isinstance(decoder_output[0], FinalBeamSearchDecoderOutput):
-        output = decoder_output[0].predicted_ids
-    else:
-        output = decoder_output[0].sample_id
-    return output
-
-
-def seq_length(decoder_output):
-    if isinstance(decoder_output[0], FinalBeamSearchDecoderOutput):
-        return decoder_output[1].lengths
-
-    return decoder_output[2]
-
-
-def last_hidden_state(decoder_output):
-    return decoder_output[1]
