@@ -24,11 +24,11 @@ from __future__ import print_function
 
 import tensorflow as tf  # pylint: disable=g-bad-import-order
 
-from models.im_transf_ee_rnn.transformer import attention_layer
-from models.im_transf_ee_rnn.transformer import beam_search
-from models.im_transf_ee_rnn.transformer import embedding_layer
-from models.im_transf_ee_rnn.transformer import ffn_layer
-from models.im_transf_ee_rnn.transformer import model_utils
+from models.im_all_transformer.transformer import attention_layer
+from models.im_all_transformer.transformer import beam_search
+from models.im_all_transformer.transformer import embedding_layer
+from models.im_all_transformer.transformer import ffn_layer
+from models.im_all_transformer.transformer import model_utils
 
 # from models.transformer import EOS_ID
 

@@ -10,7 +10,9 @@ import models.common.sequence as seq
 #                  use_beam_decoder=False, use_dropout=False, no_insert_delete_attn=False, enable_vae=True):
 from models.common.config import Config
 from models.im_all_transformer import encoder
+from models.im_all_transformer.decoder import Decoder
 from models.im_all_transformer.edit_encoder import attn_encoder
+from models.im_all_transformer.transformer import model_utils
 from models.im_all_transformer.transformer.embedding_layer import EmbeddingSharedWeights
 from models.neural_editor.edit_encoder import random_noise_encoder
 
@@ -28,28 +30,11 @@ def editor_train(base_word_ids, output_word_ids,
     iw_len = seq.length_pre_embedding(insert_word_ids)
     cw_len = seq.length_pre_embedding(common_word_ids)
 
-    # # variable of shape [vocab_size, embed_dim]
-    # embeddings = vocab.get_embeddings()
-    #
-    # # [batch x max_len x embed_dim]
-    # base_word_embeds = vocab.embed_tokens(base_words)
-    # src_word_embeds = vocab.embed_tokens(source_words)
-    # tgt_word_embeds = vocab.embed_tokens(target_words)
-
     embedding_layer = EmbeddingSharedWeights.get_from_graph()
     insert_embeds = embedding_layer(insert_word_ids)
     common_embeds = embedding_layer(common_word_ids)
-    #
-    # # [batch x max_len x rnn_out_dim], [batch x rnn_out_dim]
-    # base_sent_hidden_states, base_sent_embed = encoder.source_sent_encoder(
-    #     base_word_embeds,
-    #     base_len,
-    #     hidden_dim, num_encoder_layers,
-    #     use_dropout=use_dropout, dropout_keep=dropout_keep, swap_memory=swap_memory
-    # )
-    #
 
-    base_hidden_states = encoder.base_sent_encoder(base_word_ids, base_len, config)
+    base_sent_hidden_states, base_sent_attention_bias = encoder.base_sent_encoder(base_word_ids, base_len, config)
 
     kill_edit = config.editor.kill_edit
     draw_edit = config.editor.draw_edit
@@ -62,12 +47,18 @@ def editor_train(base_word_ids, output_word_ids,
         if draw_edit:
             edit_vector = random_noise_encoder(batch_size, config.editor.edit_encoder.edit_dim, config.editor.norm_max)
         else:
-            edit_vector, wa_inserted, wa_deleted = attn_encoder(
+            edit_vector, mev_st, mev_ts = attn_encoder(
                 source_word_ids, target_word_ids,
                 insert_embeds, common_embeds,
                 src_len, tgt_len, iw_len, cw_len,
                 config
             )
+
+    decoder = Decoder(config)
+    logits = decoder(output_word_ids, output_len,
+                     base_sent_hidden_states, base_sent_attention_bias,
+                     edit_vector, mev_st, mev_ts,
+                     mode='train')
 
     #
     # # [batch x agenda_dim]
@@ -110,3 +101,5 @@ def editor_train(base_word_ids, output_word_ids,
     #     add_decoder_attn_history_graph(infr_decoder)
     #
     # return train_decoder, infr_decoder, train_dec_out, train_dec_out_len
+
+    return logits

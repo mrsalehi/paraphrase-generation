@@ -5,7 +5,6 @@ from models.common.config import Config
 from models.im_all_transformer.transformer import model_utils
 from models.im_all_transformer.transformer.embedding_layer import EmbeddingSharedWeights
 from models.im_all_transformer.transformer.transformer import EncoderStack, DecoderStack
-from models.neural_editor.edit_encoder import sample_vMF
 
 OPS_NAME = 'edit_encoder'
 
@@ -16,8 +15,8 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
         self.params = params
         is_training = graph_utils.is_training()
 
-        encoder_config = Config.merge([params, params.encoder])
-        decoder_config = Config.merge([params, params.decoder])
+        encoder_config = Config.merge_to_new([params, params.encoder])
+        decoder_config = Config.merge_to_new([params, params.decoder])
 
         self.target_encoder = EncoderStack(encoder_config.to_json(), is_training)
         self.mev_decoder = DecoderStack(decoder_config.to_json(), is_training)
@@ -84,15 +83,14 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
 
             with tf.name_scope("pooler"):
                 # We "pool" the model by simply taking the hidden state corresponding
-                # to the first token. We assume that this has been pre-trained
-                # [batch, hidden_size]
+                # to the first token.
                 first_token_tensor = tf.squeeze(decoder_output[:, 0:1, :], axis=1)
                 pooled = self.pooling_layer(first_token_tensor)
 
             # [batch, length, hidden_size]
             micro_ev = self.mev_projection(decoder_output[:, 1:, :])
 
-            return encoded_tgt, pooled, micro_ev
+            return encoded_tgt, tgt_attention_bias, pooled, micro_ev
 
     def _add_cls_token(self, embedded_seq):
         """
@@ -200,12 +198,12 @@ def attn_encoder(src_word_ids, tgt_word_ids, insert_embeds, common_embeds,
             use_bias=True,
             name='micro_ev_proj'
         )
-        params = Config.merge([config.editor.transformer, config.editor.edit_encoder.transformer])
+        params = Config.merge_to_new([config.editor.transformer, config.editor.edit_encoder.transformer])
 
         mev_extractor = TransformerMicroEditExtractor(embedding_layer, micro_ev_projection, params)
 
-        cnx_tgt, pooled_src, micro_evs_st = mev_extractor(src_word_ids, tgt_word_ids, src_len, tgt_len)
-        cnx_src, pooled_tgt, micro_evs_ts = mev_extractor(tgt_word_ids, src_word_ids, tgt_len, src_len)
+        cnx_tgt, tgt_attn_bias, pooled_src, micro_evs_st = mev_extractor(src_word_ids, tgt_word_ids, src_len, tgt_len)
+        cnx_src, src_attn_bias, pooled_tgt, micro_evs_ts = mev_extractor(tgt_word_ids, src_word_ids, tgt_len, src_len)
 
         features = tf.concat([
             pooled_src,
@@ -219,4 +217,4 @@ def attn_encoder(src_word_ids, tgt_word_ids, insert_embeds, common_embeds,
         if config.editor.enable_dropout and config.editor.dropout_keep < 1.:
             edit_vector = tf.nn.dropout(edit_vector, config.editor.dropout_keep)
 
-        return edit_vector, (cnx_src, micro_evs_st), (cnx_tgt, micro_evs_ts)
+        return edit_vector, (micro_evs_st, cnx_src, src_attn_bias), (micro_evs_ts, cnx_tgt, tgt_attn_bias)

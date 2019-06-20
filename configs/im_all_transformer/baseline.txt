@@ -26,6 +26,12 @@ editor {
 
     }
 
+    decoder {
+        num_heads = 2
+        allow_mev_st_attn = True
+        allow_mev_ts_attn = False
+    }
+
     use_pretrained_embeddings = True
     use_sub_words = True
 

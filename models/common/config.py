@@ -85,6 +85,18 @@ class Config(object):
         return cls(ctree)
 
     @classmethod
+    def merge_to_new(cls, configs):
+        for i in range(len(configs)):
+            assert isinstance(configs[i], Config)
+            configs[i] = deepcopy(configs[i])
+
+        ctree = configs[0]._config_tree
+        for c in configs[1:]:
+            ctree = ConfigTree.merge_configs(ctree, c._config_tree)
+
+        return cls(ctree)
+
+    @classmethod
     def from_files(cls, paths):
         configs = [Config.from_file(p) for p in paths]
         return Config.merge(configs)  # later configs overwrite earlier configs
