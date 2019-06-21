@@ -20,7 +20,9 @@ class ModelRunner(object):
         self._path_model_dir()
         self._put_epoch_num()
 
-        tf.logging.info("Model: "+ self.model.NAME)
+        self._config.put('local_data_dir', self._data_dir)
+
+        tf.logging.info("Model: " + self.model.NAME)
         tf.logging.info("Config:")
         tf.logging.info(str(self._config))
         print()

@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from bpemb import BPEmb
 
 from models.common.vocab import PAD_TOKEN
@@ -64,6 +66,59 @@ def map_str_to_bytes(instance):
         return convert_to_bytes(instance)
 
 
+def preprocess_example(instance, tokenizer_fn):
+    processed_instance = []
+
+    for s in instance:
+        toks = tokenizer_fn(s)
+        processed_instance.append(toks)
+
+    processed_instance = map_str_to_bytes(tuple(processed_instance))
+
+    return processed_instance
+
+
+def get_t2t_tokenizer_fn(config):
+    encoder = vocab.get_t2t_subword_encoder_instance(config)
+    word_tokenizer = get_single_word_tokenizer_fn(config)
+
+    def tokenize(s: str) -> Sequence[str]:
+        toks = word_tokenizer(s)
+        subword_ids = encoder.encode(toks, disable_tokenizer=True)
+        subword_strs = encoder.decode_list(subword_ids)
+        return subword_strs
+
+    return tokenize
+
+
+def get_single_word_tokenizer_fn(config):
+    def tokenize(s: str) -> Sequence[str]:
+        return s.lower().split()
+
+    return tokenize
+
+
+def get_bpemb_sub_word_tokenizer_fn(config):
+    bpemb = vocab.get_bpemb_instance(config)
+
+    def tokenize(s: str) -> Sequence[str]:
+        return bpemb.encode(s)
+
+    return tokenize
+
+
+def get_process_example_fn(config):
+    tokenizer_fn = get_single_word_tokenizer_fn(config)
+    if config.editor.get('use_sub_words', False):
+        if config.editor.get('use_t2t_sub_words', False):
+            tokenizer_fn = get_t2t_tokenizer_fn(config)
+        else:
+            tokenizer_fn = get_bpemb_sub_word_tokenizer_fn(config)
+
+    process_example_fn = lambda x: preprocess_example(x, tokenizer_fn)
+    return process_example_fn
+
+
 def read_examples_from_file(file_path, config, num_samples=None, seed=0, noiser=None, free_set=None):
     print("new input")
     if not isinstance(file_path, str):
@@ -74,15 +129,11 @@ def read_examples_from_file(file_path, config, num_samples=None, seed=0, noiser=
         examples = DATASET_CACHE[file_path]
     else:
         print('Reading examples from %s...' % file_path)
+        process_example_fn = get_process_example_fn(config)
         with open(file_path, encoding='utf8') as f:
             lines = map(lambda x: x[:-1], f)
             examples = map(lambda x: parse_instance(x, noiser, free_set), lines)
-
-            if config.editor.get('use_sub_words', False):
-                bpemb = vocab.get_bpemb_instance(config)
-                examples = map(lambda x: map_word_to_sub_words(x, bpemb), examples)
-
-            examples = map(map_str_to_bytes, examples)
+            examples = map(process_example_fn, examples)
             examples = list(tqdm(examples, total=util.get_num_total_lines(file_path)))
 
         DATASET_CACHE[file_path] = examples

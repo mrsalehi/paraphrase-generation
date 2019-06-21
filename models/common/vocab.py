@@ -1,9 +1,12 @@
+import os
+
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.lookup as lookup
 from bpemb import BPEmb
 
 from models.common import graph_utils
+from models.common.config import Config
 
 PAD_TOKEN = '<pad>'
 UNKNOWN_TOKEN = '<unk>'
@@ -120,6 +123,17 @@ def read_subword_embeddings(config):
     return V, embedding_matrix
 
 
+def read_t2t_subword_embeddings(config):
+    word_dim = config.editor.word_dim
+
+    encoder = get_t2t_subword_encoder_instance(config)
+    V = list(encoder.all_subtoken_strings)
+
+    embedding_matrix = np.random.normal(0, word_dim ** -0.5, (len(V), word_dim))
+    embedding_matrix[0] = np.zeros((word_dim,), dtype=np.float32)
+    return V, embedding_matrix
+
+
 def get_vocab_lookup(vocab, name=None, reuse=None):
     with tf.variable_scope(name, 'vocab_lookup', reuse=reuse):
         vocab_lookup = lookup.index_table_from_tensor(
@@ -200,3 +214,11 @@ def get_bpemb_instance(config) -> BPEmb:
         return BPEmb(lang='en', vs=config.editor.vocab_size, dim=config.editor.word_dim, vs_fallback=False)
     else:
         return BPEmb(lang='en', vs=config.editor.vocab_size, vs_fallback=False)
+
+
+def get_t2t_subword_encoder_instance(config: Config):
+    from models.common.subtoken_encoder import SubwordTextEncoder
+    vocab_path = str(config.local_data_dir / config.dataset.path / config.editor.t2t_sub_words_vocab_path)
+    encoder = SubwordTextEncoder(vocab_path)
+
+    return encoder

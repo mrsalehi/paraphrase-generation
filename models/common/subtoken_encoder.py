@@ -12,14 +12,18 @@ import six
 import tensorflow as tf
 from six.moves import range  # pylint: disable=redefined-builtin
 
-from models.common import tokenizer
+from models.common import tokenizer, vocab
 from models.common.util import read_tsv
 
-PAD = "<pad>"
-EOS = "<EOS>"
-RESERVED_TOKENS = [PAD, EOS]
+PAD = vocab.PAD_TOKEN
+UNK = vocab.UNKNOWN_TOKEN
+BOS = vocab.START_TOKEN
+EOS = vocab.STOP_TOKEN
+RESERVED_TOKENS = [PAD, UNK, BOS, EOS]
 NUM_RESERVED_TOKENS = len(RESERVED_TOKENS)
 PAD_ID = RESERVED_TOKENS.index(PAD)  # Normally 0
+UNK_ID = RESERVED_TOKENS.index(UNK)
+BOS_ID = RESERVED_TOKENS.index(BOS)
 EOS_ID = RESERVED_TOKENS.index(EOS)  # Normally 1
 
 if six.PY2:
@@ -681,3 +685,15 @@ if __name__ == '__main__':
         gen,
         target_size=300,
         disable_tokenizer=True)
+
+    toks = ['what', '<pad>', '<unk>', 'hello']
+    subword_toks_ids = encoder.encode(['what', '<pad>', '<unk>', 'hello'], disable_tokenizer=True)
+    subword_toks = encoder.decode_list(subword_toks_ids)
+    decoded_toks = encoder.decode(subword_toks_ids, strip_extraneous=True, disable_tokenizer=True)
+
+    print("toks", toks)
+    print("subword_toks", subword_toks)
+    print("subword_toks_ids", subword_toks_ids)
+    print("decoded_toks", decoded_toks)
+
+    encoder.store_to_file('../../data/quora_naug/sub_word_vocab.txt')

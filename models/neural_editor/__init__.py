@@ -11,7 +11,7 @@ from tensorflow.python import debug as tf_debug
 # deprecation._PRINT_DEPRECATION_WARNINGS = False
 from tensorflow.python.util import deprecation
 
-logging.disable(logging.WARNING)
+# logging.disable(logging.WARNING)
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
 try:
@@ -36,7 +36,10 @@ NAME = 'neural_editor'
 
 def get_vocab_embedding_matrix(config, data_dir):
     if config.editor.get('use_sub_words', False):
-        output = vocab.read_subword_embeddings(config)
+        if config.editor.get('use_t2t_sub_words'):
+            output = vocab.read_t2t_subword_embeddings(config)
+        else:
+            output = vocab.read_subword_embeddings(config)
     else:
         output = vocab.read_word_embeddings(
             data_dir / 'word_vectors' / config.editor.wvec_path,
