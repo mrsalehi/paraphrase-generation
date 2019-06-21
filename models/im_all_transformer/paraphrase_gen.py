@@ -39,6 +39,8 @@ def clean_sentence(sent):
 
 
 def clean_sub_word_sentence(word_ids: np.array, bpemb: BPEmb):
+    # Extra padding token is remove in BPEmb
+    word_ids = word_ids - 1
     try:
         index = list(word_ids).index(bpemb.EOS)
         words = bpemb.decode_ids(word_ids[:index])
@@ -75,7 +77,9 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         # paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
         if config.editor.use_sub_words:
-            paraphrases = [clean_sub_word_sentence(j, bpemb) for j in o['decoded_ids']]
+            # paraphrases = [clean_sub_word_sentence(j, bpemb) for j in o['decoded_ids']]
+            paraphrases = [clean_sentence(j.decode('utf8')).split() for j in o['joined']]
+            paraphrases = bpemb.decode(paraphrases)
         else:
             paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
 
