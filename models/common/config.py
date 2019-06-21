@@ -21,6 +21,8 @@ class Config(object):
         self._config_tree = config_tree
 
     def __getattr__(self, item):
+        if item == 'trainable_weights':
+            return None
         val = self._config_tree[item]
         if isinstance(val, ConfigTree):
             return Config(val)
