@@ -214,8 +214,8 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         tokens = decoder.str_tokens(decoded_ids)
 
         preds = {
-            'str_tokens': decoder.str_tokens(decoded_ids),
-            'decoded_ids': decoded_ids,
+            'str_tokens': tf.transpose(tokens, [0, 2, 1]),
+            'decoded_ids': tf.transpose(decoded_ids, [0, 2, 1]),
             'lengths': decoded_lengths,
             'joined': metrics.join_tokens(tokens, decoded_lengths),
         }

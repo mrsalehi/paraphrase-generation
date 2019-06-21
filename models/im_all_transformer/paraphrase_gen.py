@@ -1,3 +1,5 @@
+import numpy as np
+from bpemb import BPEmb
 from tqdm import tqdm
 
 from models.common import vocab, util
@@ -36,6 +38,16 @@ def clean_sentence(sent):
     return sent.replace(vocab.STOP_TOKEN, '').strip()
 
 
+def clean_sub_word_sentence(word_ids: np.array, bpemb: BPEmb):
+    try:
+        index = list(word_ids).index(bpemb.EOS)
+        words = bpemb.decode_ids(word_ids[:index])
+    except ValueError:  # No EOS found in sequence
+        words = bpemb.decode_ids(word_ids)
+
+    return words
+
+
 def generate(estimator, plan_path, checkpoint_path, config, V):
     vocab.create_vocab_lookup_tables(V)
 
@@ -51,6 +63,9 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
         checkpoint_path=checkpoint_path
     )
 
+    if config.editor.use_sub_words:
+        bpemb = vocab.get_bpemb_instance(config)
+
     # plan2paraphrase = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
     plan2paraphrase = [[None for _ in evs] for b, evs in plans]
     plan2attn_weight = [[None for _ in evs] for b, evs in plans]
@@ -59,7 +74,11 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         # paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
-        paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
+        if config.editor.use_sub_words:
+            paraphrases = [clean_sub_word_sentence(j, bpemb) for j in o['decoded_ids']]
+        else:
+            paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
+
         assert len(paraphrases) == beam_width
 
         plan_index, edit_index = formula2plan[i]
