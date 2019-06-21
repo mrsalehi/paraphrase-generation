@@ -33,7 +33,7 @@ def create_formulas(plans, config):
 
 
 def clean_sentence(sent):
-    return sent.replace('<stop>', '').strip()
+    return sent.replace(vocab.STOP_TOKEN, '').strip()
 
 
 def generate(estimator, plan_path, checkpoint_path, config, V):
@@ -64,15 +64,6 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
 
         plan_index, edit_index = formula2plan[i]
         plan2paraphrase[plan_index][edit_index] = paraphrases
-
-        # if 'attns_weight_0' in o and 'attns_weight_1' in o:
-        #     plan2attn_weight[plan_index][edit_index] = (o['attns_weight_0'], o['attns_weight_1'])
-        #
-        # if 'dec_alg_base' in o:
-        #     plan2dec_base_attn_weight[plan_index][edit_index] = o['dec_alg_base']
-        #
-        # if 'dec_alg_mev' in o:
-        #     plan2dec_mev_attn_weight[plan_index][edit_index] = o['dec_alg_mev']
 
     assert len(plans) == len(plan2paraphrase)
 

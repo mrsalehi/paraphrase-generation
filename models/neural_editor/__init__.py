@@ -1,9 +1,18 @@
 import json
+import logging
 import pickle
 import random
 
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
+
+# import tensorflow.python.util.deprecation as deprecation
+#
+# deprecation._PRINT_DEPRECATION_WARNINGS = False
+from tensorflow.python.util import deprecation
+
+logging.disable(logging.WARNING)
+deprecation._PRINT_DEPRECATION_WARNINGS = False
 
 try:
     from tensorflow.contrib.estimator import InMemoryEvaluatorHook

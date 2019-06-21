@@ -19,10 +19,9 @@ editor {
         attention_dropout = 0.1
         relu_dropout = 0.1
         allow_ffn_pad = True
-        initializer_gain = 1.0
     }
 
-    base_sent_encoder {
+    encoder {
 
     }
 
@@ -39,6 +38,8 @@ editor {
     use_pretrained_embeddings = True
     use_sub_words = True
 
+    initializer_gain = 1.0
+
     vocab_size = 5000  # a proper size would be >20000
     word_dim = 50
     hidden_dim = 256  # hidden state dim of encoder and decoder
@@ -51,6 +52,7 @@ editor {
     beam_width = 5
 
     dropout_keep = 0.8
+    dropout = 0.2
     enable_dropout = True
 
     layer_postprocess_dropout = 0.1
@@ -94,11 +96,15 @@ editor {
 
     edit_encoder {
         edit_dim = 128
-        wa_dim = 128
         micro_ev_dim = 128
-        mev_proj_activation_fn = tanh
+        # mev_proj_activation_fn = tanh
+        # edit_vector_proj_activation_fn = tanh
 
-        transformer {
+        word_acc {
+            accumulated_dim = 128
+        }
+
+        extractor {
             hidden_size = 128
             filter_size = 256
 

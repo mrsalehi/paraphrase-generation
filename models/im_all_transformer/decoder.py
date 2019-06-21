@@ -5,7 +5,6 @@ from tensorflow.contrib.seq2seq import FinalBeamSearchDecoderOutput
 
 from models.common import sequence, vocab, graph_utils
 from models.common.config import Config
-from models.im_all_transformer.edit_encoder import ProjectedEmbedding
 from models.im_all_transformer.transformer import attention_layer, ffn_layer, model_utils, beam_search
 from models.im_all_transformer.transformer.embedding_layer import EmbeddingSharedWeights
 from models.im_all_transformer.transformer.transformer import PrePostProcessingWrapper, LayerNormalization
@@ -211,7 +210,7 @@ class Decoder(tf.layers.Layer):
         embedding_layer = EmbeddingSharedWeights.get_from_graph()
         self.vocab_size = embedding_layer.vocab_size
         if config.editor.word_dim != self.config.orig_hidden_size:
-            self.embedding_layer = ProjectedEmbedding(self.config.orig_hidden_size, embedding_layer)
+            self.embedding_layer = embedding_layer.get_projected(self.config.orig_hidden_size)
         else:
             self.embedding_layer = embedding_layer
 
@@ -442,3 +441,7 @@ def str_tokens(decoded_ids):
     return vocab_i2s.lookup(
         tf.to_int64(decoded_ids)
     )
+
+
+def logits_to_decoded_ids(logits):
+    return tf.argmax(logits, axis=-1)

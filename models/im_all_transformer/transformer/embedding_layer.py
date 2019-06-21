@@ -24,6 +24,26 @@ import tensorflow as tf  # pylint: disable=g-bad-import-order
 from models.common import vocab
 
 
+class ProjectedEmbedding(tf.layers.Layer):
+    def __init__(self, hidden_dim, embedding_layer, **kwargs):
+        super().__init__(**kwargs)
+        self.embedding_layer: EmbeddingSharedWeights = embedding_layer
+        self.embedding_proj = tf.layers.Dense(hidden_dim,
+                                              activation=None,
+                                              use_bias=False,
+                                              name='embedding_proj')
+
+    def call(self, inputs, **kwargs):
+        embeddings = self.embedding_layer(inputs)
+        projected = self.embedding_proj(embeddings)
+
+        return projected
+
+    @staticmethod
+    def get_from_graph(hidden_size):
+        return EmbeddingSharedWeights.get_from_graph().get_projected(hidden_size)
+
+
 class EmbeddingSharedWeights(tf.layers.Layer):
     """Calculates input embeddings and pre-softmax linear with shared weights."""
 
@@ -76,6 +96,9 @@ class EmbeddingSharedWeights(tf.layers.Layer):
     def mask(self, x):
         mask = tf.to_float(tf.not_equal(x, 0))
         return mask
+
+    def get_projected(self, hidden_size):
+        return ProjectedEmbedding(hidden_size, self)
 
     def linear(self, x):
         """Computes logits by running x through a linear layer.

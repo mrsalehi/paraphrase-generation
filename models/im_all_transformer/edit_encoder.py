@@ -37,60 +37,56 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
                and src_len is not None \
                and tgt_len is not None
 
-        initializer = tf.variance_scaling_initializer(
-            self.params.initializer_gain, mode="fan_avg", distribution="uniform")
+        # First calculate transformer's input and paddings
+        # [batch, length]
+        tgt_padding = model_utils.get_padding_by_seq_len(tgt_len)
+        # [batch, 1, 1, length]
+        tgt_attention_bias = model_utils.get_padding_bias(None, tgt_padding)
 
-        with tf.variable_scope("TMEV", initializer=initializer):
-            # First calculate transformer's input and paddings
-            # [batch, length]
-            tgt_padding = model_utils.get_padding_by_seq_len(tgt_len)
-            # [batch, 1, 1, length]
-            tgt_attention_bias = model_utils.get_padding_bias(None, tgt_padding)
+        # [batch, length, hidden_size]
+        embedded_tgt = self.embedding_layer(tgt)
+        # [batch, length, hidden_size]
+        embedded_tgt += model_utils.get_position_encoding(
+            tf.shape(embedded_tgt)[1],
+            self.params.hidden_size
+        )
 
-            # [batch, length, hidden_size]
-            embedded_tgt = self.embedding_layer(tgt)
-            # [batch, length, hidden_size]
-            embedded_tgt += model_utils.get_position_encoding(
-                tf.shape(embedded_tgt)[1],
-                self.params.hidden_size
-            )
+        # Add [CLS] token to the beginning of source sequence
+        # [batch, length, hidden_size]
+        embedded_src = self.embedding_layer(src)
+        # [batch, length+1, hidden_size]
+        extended_embedded_src = self._add_cls_token(embedded_src)
+        extended_embedded_src += model_utils.get_position_encoding(
+            tf.shape(extended_embedded_src)[1],
+            self.params.hidden_size
+        )
+        extended_src_len = src_len + 1
 
-            # Add [CLS] token to the beginning of source sequence
-            # [batch, length, hidden_size]
-            embedded_src = self.embedding_layer(src)
-            # [batch, length+1, hidden_size]
-            extended_embedded_src = self._add_cls_token(embedded_src)
-            extended_embedded_src += model_utils.get_position_encoding(
-                tf.shape(extended_embedded_src)[1],
-                self.params.hidden_size
-            )
-            extended_src_len = src_len + 1
+        # [batch, length+1]
+        extended_src_padding = model_utils.get_padding_by_seq_len(extended_src_len)
+        # [batch, 1,1, length+1]
+        extended_src_attention_bias = model_utils.get_padding_bias(None, extended_src_padding)
 
-            # [batch, length+1]
-            extended_src_padding = model_utils.get_padding_by_seq_len(extended_src_len)
-            # [batch, 1,1, length+1]
-            extended_src_attention_bias = model_utils.get_padding_bias(None, extended_src_padding)
+        # Encode Target
+        # [batch, length, hidden_size]
+        encoded_tgt = self._encode_tgt(embedded_tgt, tgt_padding, tgt_attention_bias)
 
-            # Encode Target
-            # [batch, length, hidden_size]
-            encoded_tgt = self._encode_tgt(embedded_tgt, tgt_padding, tgt_attention_bias)
+        # Decode source using the encoded target
+        # [batch, length+1, hidden_size]
+        decoder_output = self._decode_micro_edit_vectors(extended_embedded_src, extended_src_padding,
+                                                         extended_src_attention_bias,
+                                                         encoded_tgt, tgt_attention_bias)
 
-            # Decode source using the encoded target
-            # [batch, length+1, hidden_size]
-            decoder_output = self._decode_micro_edit_vectors(extended_embedded_src, extended_src_padding,
-                                                             extended_src_attention_bias,
-                                                             encoded_tgt, tgt_attention_bias)
+        with tf.name_scope("pooler"):
+            # We "pool" the model by simply taking the hidden state corresponding
+            # to the first token.
+            first_token_tensor = tf.squeeze(decoder_output[:, 0:1, :], axis=1)
+            pooled = self.pooling_layer(first_token_tensor)
 
-            with tf.name_scope("pooler"):
-                # We "pool" the model by simply taking the hidden state corresponding
-                # to the first token.
-                first_token_tensor = tf.squeeze(decoder_output[:, 0:1, :], axis=1)
-                pooled = self.pooling_layer(first_token_tensor)
+        # [batch, length, hidden_size]
+        micro_ev = self.mev_projection(decoder_output[:, 1:, :])
 
-            # [batch, length, hidden_size]
-            micro_ev = self.mev_projection(decoder_output[:, 1:, :])
-
-            return encoded_tgt, tgt_attention_bias, pooled, micro_ev
+        return encoded_tgt, tgt_attention_bias, pooled, micro_ev
 
     def _add_cls_token(self, embedded_seq):
         """
@@ -133,88 +129,92 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
             return outputs
 
 
-class ProjectedEmbedding(tf.layers.Layer):
-    def __init__(self, hidden_dim, embedding_layer, **kwargs):
+class WordEmbeddingAccumulator(tf.layers.Layer):
+    def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
-        self.embedding_layer: EmbeddingSharedWeights = embedding_layer
-        self.embedding_proj = tf.layers.Dense(hidden_dim,
-                                              activation=None,
-                                              use_bias=False,
-                                              name='embedding_proj')
 
-    def call(self, inputs, **kwargs):
-        embeddings = self.embedding_layer(inputs)
-        projected = self.embedding_proj(embeddings)
+        self.config = config
+        self.projector = tf.layers.Dense(config.accumulated_dim,
+                                         activation=None,
+                                         use_bias=False,
+                                         name='projector')
 
-        return projected
+    # noinspection PyMethodOverriding
+    def call(self, inp_embeds, inp_len, **kwargs):
+        max_len = tf.shape(inp_embeds)[1]
 
+        mask = tf.sequence_mask(inp_len, maxlen=max_len, dtype=tf.float32)
+        mask = tf.expand_dims(mask, 2)
 
-def wa_accumulator(insert_words, delete_words, iw_lengths, dw_lengths, edit_dim):
-    max_len = tf.shape(insert_words)[1]
-    mask = tf.sequence_mask(iw_lengths, maxlen=max_len, dtype=tf.float32)
-    mask = tf.expand_dims(mask, 2)
-    insert_embed = tf.reduce_sum(mask * insert_words, axis=1)
+        acc = tf.reduce_sum(mask * inp_embeds, axis=1)
+        acc = self.projector(acc)
 
-    max_len = tf.shape(delete_words)[1]
-    mask = tf.sequence_mask(dw_lengths, maxlen=max_len, dtype=tf.float32)
-    mask = tf.expand_dims(mask, 2)
-    delete_embed = tf.reduce_sum(mask * delete_words, axis=1)
-
-    linear_prenoise = tf.make_template('linear_prenoise', tf.layers.dense,
-                                       units=edit_dim,
-                                       activation=None,
-                                       use_bias=False)
-    insert_embed = linear_prenoise(insert_embed)
-    delete_embed = linear_prenoise(delete_embed)
-
-    return insert_embed, delete_embed
+        return acc
 
 
-def attn_encoder(src_word_ids, tgt_word_ids, insert_embeds, common_embeds,
-                 src_len, tgt_len, iw_len, cw_len,
-                 config):
-    with tf.variable_scope(OPS_NAME):
-        wa_inserted, wa_common = wa_accumulator(
-            insert_embeds, common_embeds,
-            iw_len, cw_len,
-            config.editor.edit_encoder.wa_dim
-        )
+class EditEncoder(tf.layers.Layer):
+    def __init__(self, config, **kwargs):
+        super().__init__(**kwargs)
 
-        if config.editor.enable_dropout and config.editor.dropout_keep < 1.:
-            wa_inserted = tf.nn.dropout(wa_inserted, config.editor.dropout_keep)
-            wa_common = tf.nn.dropout(wa_common, config.editor.dropout_keep)
+        self.config = config
 
-        if config.editor.word_dim != config.editor.edit_encoder.transformer.hidden_size:
-            embedding_layer = ProjectedEmbedding(
-                config.editor.edit_encoder.transformer.hidden_size,
-                EmbeddingSharedWeights.get_from_graph()
-            )
-        else:
-            embedding_layer = EmbeddingSharedWeights.get_from_graph()
+        self.embedding_layer = EmbeddingSharedWeights.get_from_graph()
+        if config.editor.word_dim != config.editor.edit_encoder.extractor.hidden_size:
+            self.embedding_layer = self.embedding_layer.get_projected(
+                config.editor.edit_encoder.extractor.hidden_size)
 
-        micro_ev_projection = tf.layers.Dense(
+        self.micro_ev_projection = tf.layers.Dense(
             config.editor.edit_encoder.micro_ev_dim,
             activation=config.editor.edit_encoder.get('mev_proj_activation_fn', None),
             use_bias=True,
             name='micro_ev_proj'
         )
-        params = Config.merge_to_new([config.editor.transformer, config.editor.edit_encoder.transformer])
 
-        mev_extractor = TransformerMicroEditExtractor(embedding_layer, micro_ev_projection, params)
+        self.edit_vector_projection = tf.layers.Dense(
+            config.editor.edit_encoder.edit_dim,
+            activation=config.editor.edit_encoder.get('edit_vector_proj_activation_fn', None),
+            use_bias=False,
+            name='encoder_ev'
+        )
 
-        cnx_tgt, tgt_attn_bias, pooled_src, micro_evs_st = mev_extractor(src_word_ids, tgt_word_ids, src_len, tgt_len)
-        cnx_src, src_attn_bias, pooled_tgt, micro_evs_ts = mev_extractor(tgt_word_ids, src_word_ids, tgt_len, src_len)
+        self.wa = WordEmbeddingAccumulator(config.editor.edit_encoder.word_acc)
 
-        features = tf.concat([
-            pooled_src,
-            pooled_tgt,
-            wa_inserted,
-            wa_common
-        ], axis=1)
+        extractor_config = Config.merge_to_new([config.editor.transformer, config.editor.edit_encoder.extractor])
+        self.mev_extractor = TransformerMicroEditExtractor(
+            self.embedding_layer,
+            self.micro_ev_projection,
+            extractor_config
+        )
 
-        edit_vector = tf.layers.dense(features, config.editor.edit_encoder.edit_dim, use_bias=False, name='encoder_ev')
+    # noinspection PyMethodOverriding
+    def call(self, src_word_ids, tgt_word_ids,
+             insert_word_ids, common_word_ids,
+             src_len, tgt_len, iw_len, cw_len, **kwargs):
+        with tf.variable_scope('edit_encoder'):
+            orig_embedding_layer = EmbeddingSharedWeights.get_from_graph()
+            wa_inserted = self.wa(orig_embedding_layer(insert_word_ids), iw_len)
+            wa_common = self.wa(orig_embedding_layer(common_word_ids), iw_len)
 
-        if config.editor.enable_dropout and config.editor.dropout_keep < 1.:
-            edit_vector = tf.nn.dropout(edit_vector, config.editor.dropout_keep)
+            if self.config.editor.enable_dropout and self.config.editor.dropout > 0.:
+                wa_inserted = tf.nn.dropout(wa_inserted, 1. - self.config.editor.dropout)
+                wa_common = tf.nn.dropout(wa_common, 1. - self.config.editor.dropout)
 
-        return edit_vector, (micro_evs_st, cnx_src, src_attn_bias), (micro_evs_ts, cnx_tgt, tgt_attn_bias)
+            outputs = self.mev_extractor(src_word_ids, tgt_word_ids, src_len, tgt_len)
+            cnx_tgt, tgt_attn_bias, pooled_src, micro_evs_st = outputs
+
+            outputs = self.mev_extractor(tgt_word_ids, src_word_ids, tgt_len, src_len)
+            cnx_src, src_attn_bias, pooled_tgt, micro_evs_ts = outputs
+
+            features = tf.concat([
+                pooled_src,
+                pooled_tgt,
+                wa_inserted,
+                wa_common
+            ], axis=1)
+
+            edit_vector = self.edit_vector_projection(features)
+
+            if self.config.editor.enable_dropout and self.config.editor.dropout > 0.:
+                edit_vector = tf.nn.dropout(edit_vector, 1. - self.config.editor.dropout)
+
+            return edit_vector, (micro_evs_st, cnx_src, src_attn_bias), (micro_evs_ts, cnx_tgt, tgt_attn_bias)
