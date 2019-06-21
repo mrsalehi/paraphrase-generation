@@ -105,10 +105,10 @@ class Attention(tf.layers.Layer):
         # values rather than regular attention (which uses a single q, k, v).
         q = self.q_dense_layer(x)
         k = self.k_dense_layer(y)
-        if z is not None:
-            v = self.v_dense_layer(z)
-        else:
+        if z is None:
             v = self.v_dense_layer(y)
+        else:
+            v = self.v_dense_layer(z)
 
         if cache is not None:
             # Combine cached keys and values with new keys and values.
