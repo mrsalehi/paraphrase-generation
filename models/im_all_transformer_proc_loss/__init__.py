@@ -1,7 +1,7 @@
 import models.neural_editor as base
 from models.im_all_transformer_proc_loss.model import model_fn
 
-NAME = 'im_all_transformer_straight_attn'
+NAME = 'im_all_transformer_proc_loss'
 
 
 def train(*args):
