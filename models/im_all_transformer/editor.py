@@ -35,7 +35,7 @@ class Editor:
             draw_edit = self.config.editor.draw_edit
 
             if self.config.editor.decoder.allow_mev_st_attn \
-                    or self.config.editor.allow_mev_ts_attn:
+                    or self.config.editor.decoder.allow_mev_ts_attn:
                 assert kill_edit == False and draw_edit == False
 
             if kill_edit:
