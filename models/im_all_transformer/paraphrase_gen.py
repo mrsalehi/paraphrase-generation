@@ -4,7 +4,7 @@ import numpy as np
 from bpemb import BPEmb
 from tqdm import tqdm
 
-from models.common import vocab, util
+from models.common import vocab, util, subtoken_encoder
 from models.im_all_transformer.input import parse_instance, map_word_to_sub_words, map_str_to_bytes, \
     input_fn_from_gen_multi, get_process_example_fn
 from models.neural_editor.edit_noiser import EditNoiser
@@ -76,7 +76,7 @@ def get_t2t_subword_decode_fn(config):
     def decode_sent(word_ids):
         word_ids = list(word_ids)
         try:
-            index = word_ids.index(vocab.STOP_TOKEN)
+            index = word_ids.index(subtoken_encoder.EOS_ID)
             words = encoder.decode(word_ids[:index], disable_tokenizer=True)
         except ValueError:  # No EOS found in sequence
             words = encoder.decode(word_ids, disable_tokenizer=True)

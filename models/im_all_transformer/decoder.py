@@ -24,7 +24,7 @@ def prepare_decoder_input(seq):
 
 def prepare_decoder_output(seq, seq_len):
     pad_token_id = vocab.get_token_id(vocab.PAD_TOKEN)
-    stop_token_id = vocab.get_token_id(vocab.START_TOKEN)
+    stop_token_id = vocab.get_token_id(vocab.STOP_TOKEN)
 
     batch_size = tf.shape(seq)[0]
 
