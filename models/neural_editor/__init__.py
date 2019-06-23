@@ -388,4 +388,4 @@ def generate_paraphrase(config, data_dir, checkpoint_path, plan_path, output_pat
     save_tsv(output_path, flatten)
     paraphrase_gen.save_attn_weights(attn_weights, '%s.attn_weights' % output_path)
     paraphrase_gen.save_attn_weights(base_attn_weight, '%s.base_attn_weights' % output_path)
-    paraphrase_gen.save_attn_weights(mev_attn_weight, '%s.mev_weights' % output_path)
+    paraphrase_gen.save_attn_weights(mev_attn_weight, '%s.mev_attn_weights' % output_path)
