@@ -79,7 +79,11 @@ def get_t2t_subword_decode_fn(config):
             index = word_ids.index(subtoken_encoder.EOS_ID)
             words = encoder.decode(word_ids[:index], disable_tokenizer=True)
         except ValueError:  # No EOS found in sequence
-            words = encoder.decode(word_ids, disable_tokenizer=True)
+            try:
+                index = word_ids.index(subtoken_encoder.UNK_ID)
+                words = encoder.decode(word_ids[:index], disable_tokenizer=True)
+            except ValueError:
+                words = encoder.decode(word_ids, disable_tokenizer=True)
 
         return words
 
