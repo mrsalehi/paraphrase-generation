@@ -38,7 +38,7 @@ def calculate_loss(logits, output_words, input_words, tgt_words, label_smoothing
     input_loss, _ = optimizer.padded_cross_entropy_loss(logits, gold_input, gold_input_len, label_smoothing, vocab_size)
     tgt_loss, _ = optimizer.padded_cross_entropy_loss(logits, gold_tgt, gold_tgt_len, label_smoothing, vocab_size)
 
-    total_loss = main_loss - 1./10.0 * input_loss - 1./50 * tgt_loss
+    total_loss = main_loss - 1./50 * input_loss - 1./30 * tgt_loss
 
     return total_loss
 
