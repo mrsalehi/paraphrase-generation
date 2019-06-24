@@ -304,6 +304,7 @@ class EncoderStack(tf.layers.Layer):
     def __init__(self, params, train):
         super(EncoderStack, self).__init__()
         self.layers = []
+        self.train = train
         for _ in range(params["num_hidden_layers"]):
             # Create sublayers for each layer.
             self_attention_layer = attention_layer.SelfAttention(
@@ -333,6 +334,8 @@ class EncoderStack(tf.layers.Layer):
           Output of encoder layer stack.
           float32 tensor with shape [batch_size, input_length, hidden_size]
         """
+        self_attn_alignment_hist = []
+
         for n, layer in enumerate(self.layers):
             # Run inputs through the sublayers.
             self_attention_layer = layer[0]
@@ -341,8 +344,18 @@ class EncoderStack(tf.layers.Layer):
             with tf.variable_scope("layer_%d" % n):
                 with tf.variable_scope("self_attention"):
                     encoder_inputs = self_attention_layer(encoder_inputs, attention_bias)
+
+                if not self.train:
+                    self_attn_alignment_hist.append(self_attention_layer.layer.attn_weights)
+
                 with tf.variable_scope("ffn"):
                     encoder_inputs = feed_forward_network(encoder_inputs, inputs_padding)
+
+        if not self.train:
+            self.self_attn_alignment_history = tf.stack(self_attn_alignment_hist)
+
+            # [batch, num_layers, num_heads, len_q, len_k]
+            self.self_attn_alignment_history = tf.transpose(self.self_attn_alignment_history, [1, 0, 2, 3, 4])
 
         return self.output_normalization(encoder_inputs)
 
@@ -361,6 +374,7 @@ class DecoderStack(tf.layers.Layer):
     def __init__(self, params, train):
         super(DecoderStack, self).__init__()
         self.layers = []
+        self.train = train
         for _ in range(params["num_hidden_layers"]):
             self_attention_layer = attention_layer.SelfAttention(
                 params["hidden_size"], params["num_heads"],
@@ -400,6 +414,9 @@ class DecoderStack(tf.layers.Layer):
           Output of decoder layer stack.
           float32 tensor with shape [batch_size, target_length, hidden_size]
         """
+        self_attn_alignment_hist = []
+        enc_dec_attn_alignment_hist = []
+
         for n, layer in enumerate(self.layers):
             self_attention_layer = layer[0]
             enc_dec_attention_layer = layer[1]
@@ -412,10 +429,27 @@ class DecoderStack(tf.layers.Layer):
                 with tf.variable_scope("self_attention"):
                     decoder_inputs = self_attention_layer(
                         decoder_inputs, decoder_self_attention_bias, cache=layer_cache)
+
+                if not self.train:
+                    self_attn_alignment_hist.append(self_attention_layer.layer.attn_weights)
+
+
                 with tf.variable_scope("encdec_attention"):
                     decoder_inputs = enc_dec_attention_layer(
                         decoder_inputs, encoder_outputs, attention_bias)
+
+                if not self.train:
+                    enc_dec_attn_alignment_hist.append(enc_dec_attention_layer.layer.attn_weights)
+
                 with tf.variable_scope("ffn"):
                     decoder_inputs = feed_forward_network(decoder_inputs, input_padding)
+
+        if not self.train:
+            self.self_attn_alignment_history = tf.stack(self_attn_alignment_hist)
+            self.enc_dec_attn_alignment_history = tf.stack(enc_dec_attn_alignment_hist)
+
+            # [batch, num_layers, num_heads, len_q, len_k]
+            self.self_attn_alignment_history = tf.transpose(self.self_attn_alignment_history, [1, 0, 2, 3, 4])
+            self.enc_dec_attn_alignment_history = tf.transpose(self.enc_dec_attn_alignment_history, [1, 0, 2, 3, 4])
 
         return self.output_normalization(decoder_inputs)

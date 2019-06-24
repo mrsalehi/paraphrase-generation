@@ -131,6 +131,9 @@ class Attention(tf.layers.Layer):
     weights = tf.nn.softmax(logits, name="attention_weights")
     if self.train:
       weights = tf.nn.dropout(weights, 1.0 - self.attention_dropout)
+
+    self.attn_weights = weights
+
     attention_output = tf.matmul(weights, v)
 
     # Recombine heads --> [batch_size, length, hidden_size]

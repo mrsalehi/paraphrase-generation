@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 import models.common.sequence as sequence
-from models.common import vocab
+from models.common import vocab, graph_utils
 from models.im_attn_ee.edit_encoder import context_encoder
 from models.im_transf_ee_rnn.transformer import model_utils
 from models.im_transf_ee_rnn.transformer.transformer import EncoderStack, DecoderStack
@@ -44,6 +44,13 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
 
             micro_ev = self._decode_micro_edit_vectors(embedded_src, src_padding, src_attention_bias,
                                                        encoded_tgt, tgt_attention_bias)
+
+            if not graph_utils.is_training():
+                tf.add_to_collection('TransformerMicroEditExtractor_Attentions', [
+                    self.target_encoder.self_attn_alignment_history,
+                    self.mev_decoder.self_attn_alignment_history,
+                    self.mev_decoder.enc_dec_attn_alignment_history,
+                ])
 
             return encoded_tgt, micro_ev
 

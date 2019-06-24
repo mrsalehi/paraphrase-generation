@@ -9,6 +9,7 @@ from models.im_attn_ee_rnn_attn_dec_pg.decoder import create_decoder_cell
 from models.im_attn_ee_rnn_attn_dec_pg.optimizer import loss
 from models.im_transf_ee_rnn.edit_encoder import attn_encoder
 from models.im_transf_ee_rnn.model import model_fn
+from models.im_transf_ee_rnn.paraphrase_gen import generate
 
 NAME = 'im_transf_ee_rnn'
 
@@ -18,6 +19,7 @@ base_input.read_examples_from_file = read_examples_from_file
 base_input.input_fn = input_fn
 base_para_gen.create_formulas = create_formulas
 base_para_gen.input_fn_from_gen_multi = input_fn_from_gen_multi
+base_para_gen.generate = generate
 
 
 def train(*args):
