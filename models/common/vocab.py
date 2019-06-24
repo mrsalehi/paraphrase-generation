@@ -104,9 +104,17 @@ def read_subword_embeddings(config):
 
     global START_TOKEN
     global STOP_TOKEN
+    global SPECIAL_TOKENS
 
     START_TOKEN = bpemb.BOS_str
     STOP_TOKEN = bpemb.EOS_str
+
+    SPECIAL_TOKENS = [
+        PAD_TOKEN,
+        UNKNOWN_TOKEN,
+        START_TOKEN,
+        STOP_TOKEN
+    ]
 
     if not config.editor.get('use_pretrained_embeddings', True):
         embedding_matrix = np.random.normal(0, word_dim ** -0.5, (len(V), word_dim))
