@@ -10,10 +10,9 @@ OPS_NAME = 'edit_encoder'
 
 
 class TransformerMicroEditExtractor(tf.layers.Layer):
-    def __init__(self, embedding_layer, mev_projection, params, config, **kwargs):
+    def __init__(self, embedding_layer, mev_projection, params, **kwargs):
         super().__init__(**kwargs)
         self.params = params
-        self.config = config.to_json()
         is_training = graph_utils.is_training()
 
         encoder_config = Config.merge_to_new([params, params.encoder])
@@ -78,7 +77,7 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
                                                          extended_src_attention_bias,
                                                          encoded_tgt, tgt_attention_bias)
 
-        if not graph_utils.is_training() and self.config.get('eval.save_attentions', False):
+        if not graph_utils.is_training() and self.params.save_attentions:
             tf.add_to_collection('TransformerMicroEditExtractor_Attentions', [
                 self.target_encoder.self_attn_alignment_history,
                 self.mev_decoder.self_attn_alignment_history,
@@ -188,11 +187,11 @@ class EditEncoder(tf.layers.Layer):
         self.wa = WordEmbeddingAccumulator(config.editor.edit_encoder.word_acc)
 
         extractor_config = Config.merge_to_new([config.editor.transformer, config.editor.edit_encoder.extractor])
+        extractor_config.put('save_attention', config.get('eval.save_attentions', False))
         self.mev_extractor = TransformerMicroEditExtractor(
             self.embedding_layer,
             self.micro_ev_projection,
-            extractor_config,
-            config=config
+            extractor_config
         )
 
     # noinspection PyMethodOverriding
