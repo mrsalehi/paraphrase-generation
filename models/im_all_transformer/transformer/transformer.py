@@ -301,10 +301,10 @@ class EncoderStack(tf.layers.Layer):
       2. Feedforward network (which is 2 fully-connected layers)
     """
 
-    def __init__(self, params, train):
+    def __init__(self, params, train, save_alignment_history=False):
         super(EncoderStack, self).__init__()
         self.train = train
-        self.self_attn_alignment_history = []
+        self.save_alignment_history = not train and save_alignment_history
 
         self.layers = []
         for _ in range(params["num_hidden_layers"]):
@@ -347,13 +347,13 @@ class EncoderStack(tf.layers.Layer):
                 with tf.variable_scope("self_attention"):
                     encoder_inputs = self_attention_layer(encoder_inputs, attention_bias)
 
-                if not self.train:
+                if self.save_alignment_history:
                     self_attn_alignment_hist.append(self_attention_layer.layer.attn_weights)
 
                 with tf.variable_scope("ffn"):
                     encoder_inputs = feed_forward_network(encoder_inputs, inputs_padding)
 
-        if not self.train:
+        if self.save_alignment_history:
             self.self_attn_alignment_history = tf.stack(self_attn_alignment_hist)
 
             # [batch, num_layers, num_heads, len_q, len_k]
@@ -373,11 +373,11 @@ class DecoderStack(tf.layers.Layer):
       3. Feedforward network (2 fully-connected layers)
     """
 
-    def __init__(self, params, train):
+    def __init__(self, params, train, save_alignment_history=False):
         super(DecoderStack, self).__init__()
         self.train = train
-        self.self_attn_alignment_history = []
-        self.enc_dec_attn_alignment_history = []
+        self.save_alignment_history = not train and save_alignment_history
+
         self.layers = []
         for _ in range(params["num_hidden_layers"]):
             self_attention_layer = attention_layer.SelfAttention(
@@ -434,20 +434,20 @@ class DecoderStack(tf.layers.Layer):
                     decoder_inputs = self_attention_layer(
                         decoder_inputs, decoder_self_attention_bias, cache=layer_cache)
 
-                if not self.train:
+                if self.save_alignment_history:
                     self_attn_alignment_hist.append(self_attention_layer.layer.attn_weights)
 
                 with tf.variable_scope("encdec_attention"):
                     decoder_inputs = enc_dec_attention_layer(
                         decoder_inputs, encoder_outputs, attention_bias)
 
-                if not self.train:
+                if self.save_alignment_history:
                     enc_dec_attn_alignment_hist.append(enc_dec_attention_layer.layer.attn_weights)
 
                 with tf.variable_scope("ffn"):
                     decoder_inputs = feed_forward_network(decoder_inputs, input_padding)
 
-        if not self.train:
+        if self.save_alignment_history:
             self.self_attn_alignment_history = tf.stack(self_attn_alignment_hist)
             self.enc_dec_attn_alignment_history = tf.stack(enc_dec_attn_alignment_hist)
 
