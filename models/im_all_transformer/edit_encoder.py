@@ -18,8 +18,8 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
         encoder_config = Config.merge_to_new([params, params.encoder])
         decoder_config = Config.merge_to_new([params, params.decoder])
 
-        self.target_encoder = EncoderStack(encoder_config.to_json(), is_training)
-        self.mev_decoder = DecoderStack(decoder_config.to_json(), is_training)
+        self.target_encoder = EncoderStack(encoder_config.to_json(), is_training, params.save_attentions)
+        self.mev_decoder = DecoderStack(decoder_config.to_json(), is_training, params.save_attentions)
 
         self.embedding_layer = embedding_layer
         self.mev_projection = mev_projection

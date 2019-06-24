@@ -10,4 +10,5 @@ eval {
     debug {
         cli = False
     }
+    save_attentions = True
 }
