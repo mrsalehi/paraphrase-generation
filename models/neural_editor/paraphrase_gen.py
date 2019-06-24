@@ -71,12 +71,18 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
     plan2dec_base_attn_weight = [[None for _ in evs] for b, evs in plans]
     plan2dec_mev_attn_weight = [[None for _ in evs] for b, evs in plans]
 
+    save_attentions = config.get("eval.save_attentions", False)
+
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = [clean_sentence(j.decode('utf8')) for j in o['joined']]
         assert len(paraphrases) == beam_width
 
         plan_index, edit_index = formula2plan[i]
         plan2paraphrase[plan_index][edit_index] = paraphrases
+
+        if not save_attentions:
+            continue
+
         if 'attns_weight_0' in o and 'attns_weight_1' in o:
             plan2attn_weight[plan_index][edit_index] = (o['attns_weight_0'], o['attns_weight_1'])
 

@@ -177,12 +177,17 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
     get_paraphrases = get_convert_o_to_paraphrases_fn(config)
     get_str_tokens = get_str_token_converter(config)
 
+    save_attentions = config.get("eval.save_attentions", False)
+
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = get_paraphrases(o)
         assert len(paraphrases) == beam_width
 
         plan_index, edit_index = formula2plan[i]
         plan2paraphrase[plan_index][edit_index] = paraphrases
+
+        if not save_attentions:
+            continue
 
         if 'tmee_attentions_st_enc_self' in list(o.keys()):
             st = (o['tmee_attentions_st_enc_self'], o['tmee_attentions_st_dec_self'], o['tmee_attentions_st_dec_enc'])
