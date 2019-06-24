@@ -187,7 +187,7 @@ class EditEncoder(tf.layers.Layer):
         self.wa = WordEmbeddingAccumulator(config.editor.edit_encoder.word_acc)
 
         extractor_config = Config.merge_to_new([config.editor.transformer, config.editor.edit_encoder.extractor])
-        extractor_config.put('save_attention', config.get('eval.save_attentions', False))
+        extractor_config.put('save_attentions', config.get('eval.save_attentions', False))
         self.mev_extractor = TransformerMicroEditExtractor(
             self.embedding_layer,
             self.micro_ev_projection,
