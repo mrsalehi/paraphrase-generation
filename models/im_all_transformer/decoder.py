@@ -13,7 +13,8 @@ OPS_NAME = 'decoder'
 
 
 def prepare_decoder_input(seq):
-    start_token_id = vocab.get_token_id(vocab.START_TOKEN)
+    # start_token_id = vocab.get_token_id(vocab.START_TOKEN)
+    start_token_id = tf.constant(vocab.SPECIAL_TOKENS.index(vocab.START_TOKEN), dtype=tf.int64)
 
     batch_size = tf.shape(seq)[0]
     start_tokens = tf.fill([batch_size, 1], start_token_id)
@@ -23,8 +24,11 @@ def prepare_decoder_input(seq):
 
 
 def prepare_decoder_output(seq, seq_len):
-    pad_token_id = vocab.get_token_id(vocab.PAD_TOKEN)
-    stop_token_id = vocab.get_token_id(vocab.STOP_TOKEN)
+    # pad_token_id = vocab.get_token_id(vocab.PAD_TOKEN)
+    pad_token_id = tf.constant(vocab.SPECIAL_TOKENS.index(vocab.PAD_TOKEN), dtype=tf.int64)
+
+    # stop_token_id = vocab.get_token_id(vocab.STOP_TOKEN)
+    stop_token_id = tf.constant(vocab.SPECIAL_TOKENS.index(vocab.STOP_TOKEN), dtype=tf.int64)
 
     batch_size = tf.shape(seq)[0]
 
@@ -329,7 +333,7 @@ class Decoder(tf.layers.Layer):
             symbols_to_logits_fn = self._get_symbols_to_logits_fn(edit_vector)
 
             # Create initial set of IDs that will be passed into symbols_to_logits_fn.
-            start_id = tf.to_int32(vocab.get_token_id(vocab.START_TOKEN))
+            start_id = tf.constant(vocab.SPECIAL_TOKENS.index(vocab.START_TOKEN), dtype=tf.int32)
             initial_ids = tf.fill([batch_size], start_id)
 
             # Create cache storing decoder attention values for each layer.
@@ -360,7 +364,7 @@ class Decoder(tf.layers.Layer):
                 beam_size=self.config.beam_size,
                 alpha=self.config.beam_decoding_alpha,
                 max_decode_length=self.config.max_decode_length,
-                eos_id=tf.to_int32(vocab.get_token_id(vocab.STOP_TOKEN)))
+                eos_id=tf.constant(vocab.SPECIAL_TOKENS.index(vocab.STOP_TOKEN), dtype=tf.int32))
 
             # Change decoded_ids from [batch_size, beam_size, max_decode_length]
             # to [batch, max_decode_length, beam_size]

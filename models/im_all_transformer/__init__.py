@@ -3,7 +3,7 @@ import models.neural_editor.input as base_input
 import models.neural_editor.paraphrase_gen as base_para_gen
 from models.im_all_transformer import input as new_input
 from models.im_all_transformer.model import model_fn
-from models.im_all_transformer.paraphrase_gen import create_formulas, generate
+from models.im_all_transformer.paraphrase_gen import create_formulas, generate, save_outputs
 
 NAME = 'im_all_transformer'
 
@@ -42,5 +42,16 @@ def augment_debug(*args):
     return base.augment_debug(*args, my_model_fn=model_fn)
 
 
-def generate_paraphrase(*args):
-    return base.generate_paraphrase(*args, my_model_fn=model_fn)
+def generate_paraphrase(config, data_dir, checkpoint_path, plan_path, output_path, beam_width, batch_size):
+    V, embed_matrix = base.get_vocab_embedding_matrix(config, data_dir)
+
+    if batch_size:
+        config.put('optim.batch_size', batch_size)
+
+    if beam_width:
+        config.put('editor.beam_width', beam_width)
+
+    estimator = base.get_estimator(config, embed_matrix, model_fn)
+
+    outputs = generate(estimator, plan_path, checkpoint_path, config, V)
+    save_outputs(outputs, output_path)

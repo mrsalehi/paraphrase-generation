@@ -5,8 +5,10 @@ from bpemb import BPEmb
 from tqdm import tqdm
 
 from models.common import vocab, util, subtoken_encoder
+from models.common.util import save_tsv
 from models.im_all_transformer.input import parse_instance, map_word_to_sub_words, map_str_to_bytes, \
     input_fn_from_gen_multi, get_process_example_fn
+from models.neural_editor import paraphrase_gen
 from models.neural_editor.edit_noiser import EditNoiser
 from models.neural_editor.paraphrase_gen import read_plan
 
@@ -37,6 +39,38 @@ def clean_sentence(sent):
         sent = sent.replace(tok, '')
 
     return sent.strip()
+
+
+def get_t2t_str_tokens_fn(config):
+    encoder = vocab.get_t2t_subword_encoder_instance(config)
+
+    def converter(word_ids):
+        try:
+            index = list(word_ids).index(subtoken_encoder.PAD_ID)
+            words = encoder.decode_list(word_ids[:index])
+        except ValueError:  # No PAD found in sequence
+            words = encoder.decode_list(word_ids)
+
+        return words
+
+    return converter
+
+
+def get_bpemb_str_tokens_fn(config):
+    bpemb = vocab.get_bpemb_instance(config)
+
+    def converter(word_ids):
+        try:
+            index = list(word_ids).index(vocab.SPECIAL_TOKENS.index(vocab.PAD_TOKEN))
+            word_ids = word_ids - 1
+            words = [bpemb.pieces[i] for i in word_ids[:index]]
+        except ValueError:  # No PAD found in sequence
+            word_ids = word_ids - 1
+            words = [bpemb.pieces[i] for i in word_ids]
+
+        return words
+
+    return converter
 
 
 def clean_sub_word_sentence(word_ids: np.array, bpemb: BPEmb):
@@ -107,6 +141,20 @@ def get_convert_o_to_paraphrases_fn(config):
     return convertor_fn
 
 
+def get_str_token_converter(config):
+    if config.editor.get('use_sub_words', False):
+        if config.editor.get('use_t2t_sub_words', False):
+            fn = get_t2t_str_tokens_fn(config)
+        else:
+            fn = get_bpemb_str_tokens_fn(config)
+    else:
+        return None
+
+    convertor_fn = lambda o: fn(o)
+
+    return convertor_fn
+
+
 def generate(estimator, plan_path, checkpoint_path, config, V):
     vocab.create_vocab_lookup_tables(V)
 
@@ -122,13 +170,12 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
         checkpoint_path=checkpoint_path
     )
 
-    # plan2paraphrase = [[None for _ in range(num_edit_vectors)] for _ in range(len(plans))]
     plan2paraphrase = [[None for _ in evs] for b, evs in plans]
+    plan2pq = [[None for _ in evs] for b, evs in plans]
     plan2attn_weight = [[None for _ in evs] for b, evs in plans]
-    plan2dec_base_attn_weight = [[None for _ in evs] for b, evs in plans]
-    plan2dec_mev_attn_weight = [[None for _ in evs] for b, evs in plans]
 
     get_paraphrases = get_convert_o_to_paraphrases_fn(config)
+    get_str_tokens = get_str_token_converter(config)
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = get_paraphrases(o)
@@ -137,6 +184,29 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
         plan_index, edit_index = formula2plan[i]
         plan2paraphrase[plan_index][edit_index] = paraphrases
 
+        if 'tmee_attentions_st_enc_self' in list(o.keys()):
+            st = (o['tmee_attentions_st_enc_self'], o['tmee_attentions_st_dec_self'], o['tmee_attentions_st_dec_enc'])
+            ts = (o['tmee_attentions_ts_enc_self'], o['tmee_attentions_ts_dec_self'], o['tmee_attentions_ts_dec_enc'])
+
+            plan2attn_weight[plan_index][edit_index] = (st, ts)
+
+            plan2pq[plan_index][edit_index] = (
+                ' '.join(get_str_tokens(o['src_words'])),
+                ' '.join(get_str_tokens(o['tgt_words']))
+            )
+
     assert len(plans) == len(plan2paraphrase)
 
-    return plan2paraphrase, plan2attn_weight, plan2dec_base_attn_weight, plan2dec_mev_attn_weight
+    return plan2paraphrase, plan2attn_weight, plan2pq
+
+
+def save_outputs(outputs, output_path):
+    paras, attn_weights, pqs = outputs
+
+    paraphrase_gen.save_attn_weights(attn_weights, '%s.attn_weights' % output_path)
+
+    para_flatten = paraphrase_gen.flatten(paras)
+    save_tsv(output_path, para_flatten)
+
+    pq_flatten = paraphrase_gen.flatten(pqs)
+    save_tsv('%s.pqs' % output_path, pq_flatten)

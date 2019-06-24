@@ -1,5 +1,6 @@
 from typing import Sequence
 
+import numpy as np
 from bpemb import BPEmb
 
 from models.common.vocab import PAD_TOKEN
@@ -164,13 +165,10 @@ def input_fn(file_path, vocab_table, config, batch_size, num_epochs=None, num_ex
 
 
 def input_fn_from_gen_multi(gen, vocab_table, batch_size, shuffle_input=False, num_epochs=None, prefetch=False):
-    if isinstance(vocab_table, dict):
-        vocab_table = vocab_table[vocab.STR_TO_INT]
-
+    vocab_table = vocab.get_vocab_lookup_tables()[vocab.STR_TO_INT]
     base_dataset = list(gen())
 
-    pad_token = tf.constant(bytes(PAD_TOKEN, encoding='utf8'), dtype=tf.string)
-    pad_id = vocab_table.lookup(pad_token)
+    pad_id = tf.constant(vocab.SPECIAL_TOKENS.index(PAD_TOKEN), dtype=tf.int64)
 
     dataset_splits = []
     for index in range(len(base_dataset[0])):

@@ -77,6 +77,13 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
                                                          extended_src_attention_bias,
                                                          encoded_tgt, tgt_attention_bias)
 
+        if not graph_utils.is_training():
+            tf.add_to_collection('TransformerMicroEditExtractor_Attentions', [
+                self.target_encoder.self_attn_alignment_history,
+                self.mev_decoder.self_attn_alignment_history,
+                self.mev_decoder.enc_dec_attn_alignment_history,
+            ])
+
         with tf.name_scope("pooler"):
             # We "pool" the model by simply taking the hidden state corresponding
             # to the first token.

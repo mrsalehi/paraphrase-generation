@@ -217,8 +217,23 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
             'str_tokens': tf.transpose(tokens, [0, 2, 1]),
             'decoded_ids': tf.transpose(decoded_ids, [0, 2, 1]),
             'lengths': decoded_lengths,
-            'joined': metrics.join_tokens(tokens, decoded_lengths),
+            'joined': metrics.join_tokens(tokens, decoded_lengths)
         }
+
+        tmee_attentions = tf.get_collection('TransformerMicroEditExtractor_Attentions')
+        if len(tmee_attentions) > 0:
+            preds.update({
+                'tmee_attentions_st_enc_self': tmee_attentions[0][0],
+                'tmee_attentions_st_dec_self': tmee_attentions[0][1],
+                'tmee_attentions_st_dec_enc': tmee_attentions[0][2],
+                'tmee_attentions_ts_enc_self': tmee_attentions[1][0],
+                'tmee_attentions_ts_dec_self': tmee_attentions[1][1],
+                'tmee_attentions_ts_dec_enc': tmee_attentions[1][2],
+                'src_words': src_words,
+                'tgt_words': tgt_words,
+                'base_words': base_words,
+                'output_words': output_words
+            })
 
         return tf.estimator.EstimatorSpec(
             mode,
