@@ -1,5 +1,6 @@
 import models.neural_editor as base
 from models.im_all_transformer_proc_loss.model import model_fn
+from models.im_all_transformer import generate_paraphrase
 
 NAME = 'im_all_transformer_proc_loss'
 
@@ -24,5 +25,5 @@ def augment_debug(*args):
     return base.augment_debug(*args, my_model_fn=model_fn)
 
 
-def generate_paraphrase(*args):
-    return base.generate_paraphrase(*args, my_model_fn=model_fn)
+# def generate_paraphrase(*args):
+#     return base.generate_paraphrase(*args, my_model_fn=model_fn)
