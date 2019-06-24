@@ -13,7 +13,7 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
     def __init__(self, embedding_layer, mev_projection, params, config, **kwargs):
         super().__init__(**kwargs)
         self.params = params
-        self.config = config
+        self.config = config.to_json()
         is_training = graph_utils.is_training()
 
         encoder_config = Config.merge_to_new([params, params.encoder])
@@ -78,7 +78,7 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
                                                          extended_src_attention_bias,
                                                          encoded_tgt, tgt_attention_bias)
 
-        if not graph_utils.is_training() and self.config.eval.get('save_attentions'):
+        if not graph_utils.is_training() and self.config.get('eval.save_attentions', False):
             tf.add_to_collection('TransformerMicroEditExtractor_Attentions', [
                 self.target_encoder.self_attn_alignment_history,
                 self.mev_decoder.self_attn_alignment_history,
