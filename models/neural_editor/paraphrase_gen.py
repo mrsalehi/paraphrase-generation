@@ -103,5 +103,7 @@ def save_attn_weights(attn_weights, name):
 
 
 def flatten(plan2paras):
+    if plan2paras is None:
+        return [[]]
     flatten_plan2paras = [list(itertools.chain.from_iterable(para_lst)) for para_lst in plan2paras]
     return flatten_plan2paras
