@@ -1,12 +1,11 @@
-import models.im_all_transformer.decoder as base_decoder
-import models.im_all_transformer as base
-from models.im_all_transformer.model import model_fn
-from models.im_all_transformer_straight_attn.decoder import StraightAttentionDecoderStack
+import models.im_all_transformer.model as base_model
+import models.im_all_transformer_straight_attn as base
+from models.im_all_transformer_shr_enc.editor import Editor
+from models.im_all_transformer_straight_attn import model_fn
 
-NAME = 'im_all_transformer_straight_attn'
+NAME = 'im_all_transformer_shr_enc'
 
-# New Decoder functions
-base_decoder.MultiSourceDecoderStack = StraightAttentionDecoderStack
+base_model.Editor = Editor
 
 
 def train(*args, my_model_fn=model_fn, **kwargs):

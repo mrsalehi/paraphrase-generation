@@ -323,6 +323,9 @@ class EncoderStack(tf.layers.Layer):
         # Create final layer normalization layer.
         self.output_normalization = LayerNormalization(params["hidden_size"])
 
+    def set_save_alignment_history(self, save_alignment_history):
+        self.save_alignment_history = not self.train and save_alignment_history
+
     def call(self, encoder_inputs, attention_bias, inputs_padding):
         """Return the output of the encoder layer stacks.
 

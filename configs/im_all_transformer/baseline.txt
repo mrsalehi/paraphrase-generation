@@ -75,27 +75,6 @@ editor {
     use_beam_decoder = False
     wvec_path = glove.6B.300d_dbpedia.txt
 
-    reconstruction_dense_layers = [192]
-    recons_temp {
-        starter = 0.9
-        decay_rate = 0.6
-        decay_steps = 10000
-    }
-
-    reconstruction {
-        agenda = 64
-
-        encoder {
-            hidden = 128
-            layers = 2
-        }
-
-        decoder {
-            hidden = 128
-            layers = 2
-        }
-    }
-
     edit_encoder {
         edit_dim = 128
         micro_ev_dim = 128
@@ -107,18 +86,18 @@ editor {
         }
 
         extractor {
-            hidden_size = 128
+            hidden_size = 50
             filter_size = 256
 
             encoder {
                 num_hidden_layers = 2
-                num_heads = 4
+                num_heads = 5
             }
 
             decoder {
                 num_hidden_layers = 2
                 filter_size = 512
-                num_heads = 2
+                num_heads = 5
             }
         }
     }
