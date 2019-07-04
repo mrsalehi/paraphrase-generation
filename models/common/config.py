@@ -21,7 +21,7 @@ class Config(object):
         self._config_tree = config_tree
 
     def __getattr__(self, item):
-        if item in ['trainable_weights', 'non_trainable_weights', '_use_resource_variables']:
+        if item in ['trainable_weights', 'non_trainable_weights', '_use_resource_variables', 'weakrefself_target__', '_tf_decorator']:
             raise AttributeError()
 
         val = self._config_tree[item]

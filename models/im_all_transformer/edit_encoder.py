@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 from models.common import graph_utils
 from models.common.config import Config
@@ -31,17 +32,45 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
 
         self.pooling_layer = tf.layers.Dense(self.params.hidden_size, activation='tanh', name='pooling_layer')
 
+    def _get_attn_bias_with_dropout(self, seq, seq_len, uniform_low=0):
+        default_padding = model_utils.get_padding_by_seq_len(seq_len)
+
+        batch_size = tf.shape(default_padding)[0]
+        max_seq_len = tf.shape(default_padding)[1]
+
+        u = tfp.distributions.Uniform(low=uniform_low, high=tf.cast(seq_len, dtype=tf.float32))
+        remove_indices = tf.cast(u.sample(), tf.int32)
+        remove_padding = tf.one_hot(remove_indices, depth=max_seq_len, dtype=tf.float32) * model_utils._NEG_INF
+
+        identical_prob = self.params.get('noiser_ident_prob', 1.)
+        b = tfp.distributions.Binomial(total_count=1, probs=identical_prob)
+        non_identical_mask = b.sample(sample_shape=(batch_size,))  # [batch_size]
+        non_identical_mask = tf.tile(tf.reshape(non_identical_mask, [-1, 1]), [1, max_seq_len])
+        non_identical_mask = 1. - non_identical_mask
+
+        masked_remove_padding = non_identical_mask * remove_padding
+
+        # [batch, length]
+        padding = default_padding + masked_remove_padding
+
+        attention_bias = model_utils.get_padding_bias(None, padding=padding)
+
+        return attention_bias, padding
+
     def call(self, src, tgt=None, src_len=None, tgt_len=None, **kwargs):
         assert src is not None \
                and tgt is not None \
                and src_len is not None \
                and tgt_len is not None
 
-        # First calculate transformer's input and paddings
-        # [batch, length]
-        tgt_padding = model_utils.get_padding_by_seq_len(tgt_len)
         # [batch, 1, 1, length]
-        tgt_attention_bias = model_utils.get_padding_bias(None, tgt_padding)
+        if self.params.get('noiser_ident_prob', 1) < 1:
+            tgt_attention_bias, tgt_padding = self._get_attn_bias_with_dropout(tgt, tgt_len)
+        else:
+            # First calculate transformer's input and paddings
+            # [batch, length]
+            tgt_padding = model_utils.get_padding_by_seq_len(tgt_len)
+            tgt_attention_bias = model_utils.get_padding_bias(None, tgt_padding)
 
         # [batch, length, hidden_size]
         embedded_tgt = self.embedding_layer(tgt)
@@ -62,10 +91,14 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
         )
         extended_src_len = src_len + 1
 
-        # [batch, length+1]
-        extended_src_padding = model_utils.get_padding_by_seq_len(extended_src_len)
-        # [batch, 1,1, length+1]
-        extended_src_attention_bias = model_utils.get_padding_bias(None, extended_src_padding)
+        if self.params.get('noiser_ident_prob', 1) < 1:
+            extended_src_attention_bias, extended_src_padding = self._get_attn_bias_with_dropout(
+                src, extended_src_len, uniform_low=1)
+        else:
+            # [batch, length+1]
+            extended_src_padding = model_utils.get_padding_by_seq_len(extended_src_len)
+            # [batch, 1,1, length+1]
+            extended_src_attention_bias = model_utils.get_padding_bias(None, extended_src_padding)
 
         # Encode Target
         # [batch, length, hidden_size]
