@@ -35,6 +35,10 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
     def _get_attn_bias_with_dropout(self, seq_len, uniform_low=0):
         default_padding = model_utils.get_padding_by_seq_len(seq_len)
 
+        if not graph_utils.is_training():
+            attention_bias = model_utils.get_padding_bias(None, default_padding)
+            return attention_bias, default_padding
+
         batch_size = tf.shape(default_padding)[0]
         max_seq_len = tf.shape(default_padding)[1]
 
