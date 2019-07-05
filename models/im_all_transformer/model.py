@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.metrics as tf_metrics
 
@@ -170,6 +171,9 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
     tf.logging.info("Trainable variable")
     for i in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
         tf.logging.info(str(i))
+
+    tf.logging.info("Num of Trainable parameters")
+    tf.logging.info(np.sum([np.prod(v.get_shape().as_list()) for v in tf.trainable_variables()]))
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         decoded_ids = decoder.logits_to_decoded_ids(logits)

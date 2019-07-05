@@ -32,7 +32,7 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
 
         self.pooling_layer = tf.layers.Dense(self.params.hidden_size, activation='tanh', name='pooling_layer')
 
-    def _get_attn_bias_with_dropout(self, seq, seq_len, uniform_low=0):
+    def _get_attn_bias_with_dropout(self, seq_len, uniform_low=0):
         default_padding = model_utils.get_padding_by_seq_len(seq_len)
 
         batch_size = tf.shape(default_padding)[0]
@@ -40,9 +40,9 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
 
         u = tfp.distributions.Uniform(low=uniform_low, high=tf.cast(seq_len, dtype=tf.float32))
         remove_indices = tf.cast(u.sample(), tf.int32)
-        remove_padding = tf.one_hot(remove_indices, depth=max_seq_len, dtype=tf.float32) * model_utils._NEG_INF
+        remove_padding = tf.one_hot(remove_indices, depth=max_seq_len, dtype=tf.float32)
 
-        identical_prob = self.params.get('noiser_ident_prob', 1.)
+        identical_prob = self.params.get('noiser_ident_prob', .99)
         b = tfp.distributions.Binomial(total_count=1, probs=identical_prob)
         non_identical_mask = b.sample(sample_shape=(batch_size,))  # [batch_size]
         non_identical_mask = tf.tile(tf.reshape(non_identical_mask, [-1, 1]), [1, max_seq_len])
@@ -65,7 +65,7 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
 
         # [batch, 1, 1, length]
         if self.params.get('noiser_ident_prob', 1) < 1:
-            tgt_attention_bias, tgt_padding = self._get_attn_bias_with_dropout(tgt, tgt_len)
+            tgt_attention_bias, tgt_padding = self._get_attn_bias_with_dropout(tgt_len)
         else:
             # First calculate transformer's input and paddings
             # [batch, length]
@@ -93,7 +93,7 @@ class TransformerMicroEditExtractor(tf.layers.Layer):
 
         if self.params.get('noiser_ident_prob', 1) < 1:
             extended_src_attention_bias, extended_src_padding = self._get_attn_bias_with_dropout(
-                src, extended_src_len, uniform_low=1)
+                extended_src_len, uniform_low=1)
         else:
             # [batch, length+1]
             extended_src_padding = model_utils.get_padding_by_seq_len(extended_src_len)
