@@ -1,12 +1,14 @@
 import models.im_all_transformer.decoder as base_decoder
 import models.im_all_transformer as base
+from models.im_all_transformer import edit_encoder as base_edit_encoder
 from models.im_all_transformer.model import model_fn
+from models.im_all_transformer_straight_attn_rmv_p_min_q.edit_encoder import EditEncoderRemovePMinusQ
 from models.im_all_transformer_straight_attn.decoder import StraightAttentionDecoderStack
 
 NAME = 'im_all_transformer_straight_attn_rmv_p_min_q'
 
 # New Decoder functions
-base_decoder.MultiSourceDecoderStack = StraightAttentionDecoderStack
+base_edit_encoder.EditEncoder = EditEncoderRemovePMinusQ
 
 
 def train(*args, my_model_fn=model_fn, **kwargs):
