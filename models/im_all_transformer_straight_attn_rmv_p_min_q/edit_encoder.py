@@ -1,18 +1,17 @@
 import tensorflow as tf
 
 from models.common import graph_utils, vocab
+from models.common.config import Config
 from models.im_all_transformer import edit_encoder
 from models.im_all_transformer.edit_encoder import TransformerMicroEditExtractor
 from models.im_all_transformer.transformer import model_utils
 from models.im_all_transformer.transformer.embedding_layer import EmbeddingSharedWeights
-from models.common.config import Config
-
 
 OPS_NAME = 'edit_encoder'
 
 class EditEncoderRemovePMinusQ(edit_encoder.EditEncoder):
     def __init__(self, config, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(config, **kwargs)
 
         self.config = config
 
