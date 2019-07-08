@@ -28,13 +28,6 @@ class EditEncoderNoZ(edit_encoder.EditEncoder):
             name='micro_ev_proj'
         )
 
-        self.edit_vector_projection = tf.layers.Dense(
-            config.editor.edit_encoder.edit_dim,
-            activation=config.editor.edit_encoder.get('edit_vector_proj_activation_fn', None),
-            use_bias=False,
-            name='encoder_ev'
-        )
-
         extractor_config = Config.merge_to_new([config.editor.transformer, config.editor.edit_encoder.extractor])
         extractor_config.put('save_attentions', config.get('eval.save_attentions', False))
         self.mev_extractor = TransformerMicroEditExtractor(
@@ -57,4 +50,4 @@ class EditEncoderNoZ(edit_encoder.EditEncoder):
             src_word_embeds = self.embedding_layer(src_word_ids)
 
             return tf.constant([[0.]]), (micro_evs_st, src_word_embeds, src_attn_bias), (
-            tf.constant([[0.]]), tf.constant([[0.]]), tf.constant([[0.]]))
+                tf.constant([[0.]]), tf.constant([[0.]]), tf.constant([[0.]]))

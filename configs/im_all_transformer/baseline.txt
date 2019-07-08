@@ -6,103 +6,94 @@ seed = 0
 model_dir = im_v4_quora_naug4
 
 editor {
-    transformer {
-        # Model params
-        hidden_size = 50  # Model dimension in the hidden layers.
-        num_hidden_layers = 4  # Number of layers in the encoder and decoder stacks.
-        num_heads = 5  # Number of heads to use in multi-headed attention.
-        filter_size = 256  # Inner layer dimension in the feedforward network.
+  use_pretrained_embeddings = False
+  use_sub_words = True
+  use_t2t_sub_words = True
+  t2t_sub_words_vocab_path = sub_word_vocab.txt
 
-        # Dropout values (only used when training)
-        enable_dropout = True
-        layer_postprocess_dropout = 0.1
-        attention_dropout = 0.1
-        relu_dropout = 0.1
-        allow_ffn_pad = True
-    }
+  initializer_gain = 1.0
 
-    encoder {
+  vocab_size = 5000
+  word_dim = 128
 
-    }
+  dropout_keep = 0.7
+  dropout = 0.3
+  enable_dropout = True
 
-    decoder {
-        num_heads = 2
-        allow_mev_st_attn = True
-        allow_mev_ts_attn = False
+  norm_max = 14.0
+  kill_edit = False
+  draw_edit = False
 
-        max_decode_length = 40
-        beam_size = 5
-        beam_decoding_alpha = 0.6
-    }
+  use_free_set = True
+  wvec_path = glove.6B.300d_dbpedia.txt
 
-    use_pretrained_embeddings = True
-    use_sub_words = True
-    use_t2t_sub_words = True
-    t2t_sub_words_vocab_path = sub_word_vocab.txt
+  transformer {
+    hidden_size = 128  # Model dimension in the hidden layers.
+    num_hidden_layers = 6  # Number of layer stacks.
+    num_heads = 8  # Number of heads to use in multi-headed attention.
+    filter_size = 512  # Inner layer dimension in the feedforward network.
 
-    initializer_gain = 1.0
-
-    vocab_size = 5000  # a proper size would be >20000
-    word_dim = 97
-    hidden_dim = 256  # hidden state dim of encoder and decoder
-    agenda_dim = 256  # agenda vector dim
-    edit_dim = 128 # edit vector dimension
-    attention_dim = 128
-    max_sent_length = 40
-    encoder_layers = 3
-    decoder_layers = 3
-    beam_width = 5
-
-    dropout_keep = 0.8
-    dropout = 0.2
+    # Dropout values (only used when training)
     enable_dropout = True
+    layer_postprocess_dropout = 0.3
+    attention_dropout = 0.3
+    relu_dropout = 0.3
+    allow_ffn_pad = True
+  }
 
-    layer_postprocess_dropout = 0.1
-    attention_dropout = 0.1
-    relu_dropout = 0.1
+  encoder {
+    # Uncomment if you need to have diffrent values from transformer
+    # hidden_size = 200
+    # num_hidden_layers = 4
+    # num_heads = 6
+    # filter_size = 256
+  }
 
-    ident_pr = 0.1
-    attend_pr = 0.0
-    enable_vae = True
-    lamb_reg = 100.0
-    norm_eps = 0.1
-    norm_max = 14.0
-    kill_edit = False
-    draw_edit = False
-    use_swap_memory = True
-    use_free_set = False
-    embed_sentence = False
-    use_beam_decoder = False
-    wvec_path = glove.6B.300d_dbpedia.txt
+  decoder {
+    # Uncomment if you need to have diffrent values from transformer
+    # hidden_size = 200
+    # num_hidden_layers = 4
+    # num_heads = 6
+    # filter_size = 400
 
-    edit_encoder {
-        edit_dim = 128
-        micro_ev_dim = 128
-        # mev_proj_activation_fn = tanh
-        # edit_vector_proj_activation_fn = tanh
+    allow_mev_st_attn = True
+    allow_mev_ts_attn = False
 
-        word_acc {
-            accumulated_dim = 128
-        }
+    max_decode_length = 60
 
-        extractor {
-            hidden_size = 50
-            filter_size = 256
+    beam_size = 5
+    beam_decoding_alpha = 0.85
+  }
 
-            noiser_ident_prob = 0.7
+  edit_encoder {
+    edit_dim = 13
+    micro_ev_dim = 64
 
-            encoder {
-                num_hidden_layers = 2
-                num_heads = 5
-            }
+    mev_proj_activation_fn = tanh
+    # edit_vector_proj_activation_fn = tanh
 
-            decoder {
-                num_hidden_layers = 2
-                filter_size = 512
-                num_heads = 5
-            }
-        }
+    word_acc {
+      accumulated_dim = 64
     }
+
+    extractor {
+      hidden_size = 128
+      filter_size = 512
+
+      noiser_ident_prob = 1
+
+      encoder {
+        num_hidden_layers = 4
+        num_heads = 8
+      }
+
+      decoder {
+        num_hidden_layers = 4
+        num_heads = 8
+      }
+    }
+
+  }
 }
 
 dataset {
