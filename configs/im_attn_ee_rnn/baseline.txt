@@ -6,91 +6,61 @@ seed = 0
 model_dir = im_v4_quora_naug4
 
 editor {
-    vocab_size = 10000  # a proper size would be >20000
+    vocab_size = 20000  # a proper size would be >20000
     word_dim = 300
+
     hidden_dim = 256  # hidden state dim of encoder and decoder
-    agenda_dim = 256  # agenda vector dim
-    edit_dim = 128 # edit vector dimension
-    attention_dim = 128
-    max_sent_length = 40
-    encoder_layers = 3
-    decoder_layers = 3
+    agenda_dim = 128  # agenda vector dim
+    edit_dim = 256 # edit vector dimension
+    attention_dim = 128 # base sentence attention dim
+    encoder_layers = 3 # num of base sentence encoder layers
+    decoder_layers = 4 # num of output sentence decoder layers
     beam_width = 5
-    no_insert_delete_attn = True
-    dropout_keep = 0.8
-    ident_pr = 0.1
-    attend_pr = 0.0
-    enable_vae = True
-    lamb_reg = 100.0
-    norm_eps = 0.1
-    norm_max = 14.0
-    kill_edit = False
-    draw_edit = False
-    use_swap_memory = True
-    use_free_set = False
-    embed_sentence = False
-    use_beam_decoder = False
+
+    no_insert_delete_attn = True # always set it to True
+    max_sent_length = 40 # output sentence maximum length
+
+    dropout_keep = 0.6
+    enable_dropout = True
+
+    ident_pr = 0.1 # unusable
+    attend_pr = 0.0 # unusable
+
+    enable_vae = False # always set it to True
+    lamb_reg = 100.0 # vae params
+    norm_eps = 0.1 # vae params
+    norm_max = 14.0 # vae params
+
+    kill_edit = False # set edit vectors to Zero
+    draw_edit = False # randomly pick edit vectors
+
+    use_swap_memory = True # use system RAM to swap tensors from gpu
+    embed_sentence = False # unusable
     wvec_path = glove.6B.300d_dbpedia.txt
 
-    reconstruction_dense_layers = [192]
-    recons_temp {
+    use_beam_decoder = False # disabled at traning time
+    enable_noiser = False # unusable
+    use_free_set = True # remove stop words from P-Q and Q-P
+
+    reconstruction_dense_layers = [192] # dense layer between y_hat encoder and edit vector
+    recons_temp { # Gubmble softmax temperature
         starter = 0.9
         decay_rate = 0.6
         decay_steps = 10000
     }
 
-    reconstruction {
-        agenda = 64
+    edit_enc { # edit encoder params
+        ctx_hidden_dim = 256 # context layer params
+        ctx_hidden_layer = 3 # context layer params
 
-        encoder {
-            hidden = 128
-            layers = 2
-        }
+        wa_hidden_dim = 64 # p-q, q-p params
+        wa_hidden_layer = 1 # p-q, q-p params
 
-        decoder {
-            hidden = 128
-            layers = 2
-        }
-    }
+        num_heads = 2 # num of heads in micro-edit vectors multi head attention
+        micro_ev_dim = 128 # micro-edit vector dim
 
-    edit_enc {
-        ctx_hidden_dim = 256
-        ctx_hidden_layer = 3
-        wa_hidden_dim = 128
-        wa_hidden_layer = 1
-        meve_hidden_dim = 128
-        meve_hidden_layer = 1
-        num_heads = 4
-        micro_ev_dim = 128
-
-        transformer {
-            # Model params
-            initializer_gain = 1.0  # Used in trainable variable initialization.
-            hidden_size = 128  # Model dimension in the hidden layers.
-            num_hidden_layers = 4  # Number of layers in the encoder and decoder stacks.
-            num_heads = 4  # Number of heads to use in multi-headed attention.
-            filter_size = 256  # Inner layer dimension in the feedforward network.
-            pos_encoding_dim = 64
-
-            # Dropout values (only used when training)
-            enable_dropout = True
-            layer_postprocess_dropout = 0.1
-            attention_dropout = 0.1
-            relu_dropout = 0.1
-
-            # Training params
-            label_smoothing = 0.1
-            learning_rate = 2.0
-            learning_rate_decay_rate = 1.0
-            learning_rate_warmup_steps = 16000
-
-            # Optimizer params
-            optimizer_adam_beta1 = 0.9
-            optimizer_adam_beta2 = 0.997
-            optimizer_adam_epsilon = 1e-09
-
-            allow_ffn_pad=True
-        }
+        meve_hidden_dim = 128 # aggregation layer params
+        meve_hidden_layer = 1 # aggregation layer params
     }
 }
 
