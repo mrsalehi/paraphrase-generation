@@ -1,8 +1,8 @@
 import models.im_all_transformer_straight_attn as base
-from models.im_all_transformer_straight_attn import model_fn
 from models.im_all_transformer import editor as base_editor
-from models.im_all_transformer_straight_attn_no_z_kp.edit_encoder import EditEncoderNoZ
 from models.im_all_transformer_straight_attn_no_z_kp.decoder import Decoder
+from models.im_all_transformer_straight_attn_no_z_kp.edit_encoder import EditEncoderNoZ
+from models.im_all_transformer_straight_attn_no_z_kp.model import model_fn
 
 NAME = 'im_all_transformer_straight_attn_no_z_kp'
 

@@ -1,7 +1,7 @@
 import models.im_all_transformer_straight_attn_no_z_kp as base
-from models.im_all_transformer_straight_attn import model_fn
 from models.im_all_transformer import editor as base_editor
 from models.im_all_transformer_straight_attn_no_z_kmev.edit_encoder import EditEncoderNoZKmev
+from models.im_all_transformer_straight_attn_no_z_kp import model_fn
 
 NAME = 'im_all_transformer_straight_attn_no_z_kmev'
 
