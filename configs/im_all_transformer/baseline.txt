@@ -66,7 +66,7 @@ editor {
   }
 
   edit_encoder {
-    edit_dim = 13
+    edit_dim = 128
     micro_ev_dim = 64
 
     mev_proj_activation_fn = tanh

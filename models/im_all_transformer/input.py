@@ -120,7 +120,7 @@ def get_process_example_fn(config):
     return process_example_fn
 
 
-def read_examples_from_file(file_path, config, num_samples=None, seed=0, noiser=None, free_set=None):
+def read_examples_from_file(file_path, config, num_samples=None, seed=0, noiser=None, free_set=None, return_gen=False):
     print("new input")
     if not isinstance(file_path, str):
         file_path = str(file_path)
@@ -131,15 +131,22 @@ def read_examples_from_file(file_path, config, num_samples=None, seed=0, noiser=
     else:
         print('Reading examples from %s...' % file_path)
         process_example_fn = get_process_example_fn(config)
-        with open(file_path, encoding='utf8') as f:
-            lines = map(lambda x: x[:-1], f)
+
+        def get_gen():
+            lines = map(lambda x: x[:-1], open(file_path, encoding='utf8'))
             examples = map(lambda x: parse_instance(x, noiser, free_set), lines)
             examples = map(process_example_fn, examples)
-            examples = list(tqdm(examples, total=util.get_num_total_lines(file_path)))
+
+            return examples
+
+        if not return_gen:
+            examples = list(tqdm(get_gen(), total=util.get_num_total_lines(file_path)))
+        else:
+            examples = get_gen
 
         DATASET_CACHE[file_path] = examples
 
-    if num_samples and len(examples) > num_samples:
+    if not return_gen and num_samples and len(examples) > num_samples:
         random.seed(seed)
         examples = random.sample(examples, num_samples)
 
@@ -148,20 +155,53 @@ def read_examples_from_file(file_path, config, num_samples=None, seed=0, noiser=
 
 def input_fn(file_path, vocab_table, config, batch_size, num_epochs=None, num_examples=None, seed=0, noiser=None,
              use_free_set=False, shuffle_input=True):
-    base_dataset = read_examples_from_file(
+    gen = read_examples_from_file(
         file_path, config, num_examples, seed,
-        noiser, util.get_free_words_set() if use_free_set else None
+        noiser, util.get_free_words_set() if use_free_set else None, return_gen=True
     )
 
-    gen = lambda: iter(base_dataset)
+    # gen = lambda: iter(base_dataset)
 
-    return input_fn_from_gen_multi(
-        gen,
-        vocab_table, batch_size,
-        shuffle_input=shuffle_input,
-        num_epochs=num_epochs,
-        prefetch=True
+    # return input_fn_from_gen_multi(
+    #     gen,
+    #     vocab_table, batch_size,
+    #     shuffle_input=shuffle_input,
+    #     num_epochs=num_epochs,
+    #     prefetch=True
+    # )
+
+    vocab_table = vocab.get_vocab_lookup_tables()[vocab.STR_TO_INT]
+    # base_dataset = list(gen())
+
+    pad_id = tf.constant(vocab.SPECIAL_TOKENS.index(PAD_TOKEN), dtype=tf.int64)
+
+    dataset = tf.data.Dataset.from_generator(
+        generator=gen,
+        output_types=(tf.string, tf.string, tf.string, tf.string, tf.string, tf.string),
+        output_shapes=(tf.TensorShape([None]), tf.TensorShape([None]),
+                       tf.TensorShape([None]), tf.TensorShape([None]),
+                       tf.TensorShape([None]), tf.TensorShape([None]))
     )
+    dataset = dataset.map(lambda *x: tuple([vocab_table.lookup(i) for i in x]))
+    dataset = dataset.padded_batch(
+        batch_size,
+        padded_shapes=(tf.TensorShape([None]), tf.TensorShape([None]),
+                       tf.TensorShape([None]), tf.TensorShape([None]),
+                       tf.TensorShape([None]), tf.TensorShape([None])),
+        padding_values=tuple([pad_id] * 6)
+    )
+
+    if num_epochs and shuffle_input:
+        dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(500, num_epochs))
+    elif num_epochs:
+        dataset = dataset.repeat(num_epochs)
+
+    fake_label = tf.data.Dataset.from_tensor_slices(tf.constant([0])).repeat()
+
+    dataset = dataset.zip((dataset, fake_label))
+    dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+
+    return dataset
 
 
 def input_fn_from_gen_multi(gen, vocab_table, batch_size, shuffle_input=False, num_epochs=None, prefetch=False):
