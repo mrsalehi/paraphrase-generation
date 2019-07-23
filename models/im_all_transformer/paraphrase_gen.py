@@ -128,6 +128,20 @@ def get_t2t_subword_decode_fn(config):
     return decode
 
 
+def get_attn_pairs(attn_map, layer, head, query_len, key_len):
+    p2q_attn = attn_map[layer][head][:query_len, :key_len]
+
+    attn_tgts = np.argmax(p2q_attn, axis=1)
+    attn_srcs = np.arange(query_len)
+
+    pairs = np.concatenate([
+        attn_srcs.reshape((-1, 1)),
+        attn_tgts.reshape((-1, 1))
+    ], axis=1)
+
+    return pairs
+
+
 def get_convert_o_to_paraphrases_fn(config):
     decode_fn = get_single_word_decode_fn(config)
     if config.editor.get('use_sub_words', False):
@@ -173,11 +187,15 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
     plan2paraphrase = [[None for _ in evs] for b, evs in plans]
     plan2pq = [[None for _ in evs] for b, evs in plans]
     plan2attn_weight = [[None for _ in evs] for b, evs in plans]
+    plan2mevs = [[None for _ in evs] for b, evs in plans]
 
     get_paraphrases = get_convert_o_to_paraphrases_fn(config)
     get_str_tokens = get_str_token_converter(config)
 
     save_attentions = config.get("eval.save_attentions", False)
+    save_mev = config.get('eval.save_mev', False)
+    mev_layer = config.get('eval.save_mev_layer', 0)
+    mev_head = config.get('eval.save_mev_head', None)
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = get_paraphrases(o)
@@ -186,29 +204,56 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
         plan_index, edit_index = formula2plan[i]
         plan2paraphrase[plan_index][edit_index] = paraphrases
 
-        if not save_attentions:
+        if 'tmee_attentions_st_enc_self' not in list(o.keys()) or \
+                'src_words' not in list(o.keys()) or \
+                'tgt_words' not in list(o.keys()):
             continue
 
-        if 'tmee_attentions_st_enc_self' in list(o.keys()):
-            st = (o['tmee_attentions_st_enc_self'], o['tmee_attentions_st_dec_self'], o['tmee_attentions_st_dec_enc'])
-            ts = (o['tmee_attentions_ts_enc_self'], o['tmee_attentions_ts_dec_self'], o['tmee_attentions_ts_dec_enc'])
+        src = get_str_tokens(o['src_words'])
+        tgt = get_str_tokens(o['tgt_words'])
 
+        plan2pq[plan_index][edit_index] = (
+            ' '.join(src),
+            ' '.join(tgt)
+        )
+
+        st = (o['tmee_attentions_st_enc_self'], o['tmee_attentions_st_dec_self'], o['tmee_attentions_st_dec_enc'])
+        ts = (o['tmee_attentions_ts_enc_self'], o['tmee_attentions_ts_dec_self'], o['tmee_attentions_ts_dec_enc'])
+
+        if save_attentions:
             plan2attn_weight[plan_index][edit_index] = (st, ts)
 
-            plan2pq[plan_index][edit_index] = (
-                ' '.join(get_str_tokens(o['src_words'])),
-                ' '.join(get_str_tokens(o['tgt_words']))
-            )
+        if save_mev:
+            st_attn_map = st[-1]
+            ts_attn_map = ts[-1]
+
+            save_all_heads = mev_head is None
+            num_heads = st_attn_map.shape[1]
+
+            heads = range(num_heads) if save_all_heads else [mev_head]
+
+            st_attn_pairs = -1 * np.ones(shape=[len(src) * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
+            ts_attn_pairs = -1 * np.ones(shape=[len(tgt) * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
+
+            for i, h in enumerate(heads):
+                st_pairs = get_attn_pairs(st_attn_map, mev_layer, h, len(src), len(tgt))
+                st_attn_pairs[i * len(src):(i + 1) * len(src)] = st_pairs
+
+                ts_pairs = get_attn_pairs(ts_attn_map, mev_layer, h, len(tgt), len(src))
+                ts_attn_pairs[i * len(tgt):(i + 1) * len(tgt)] = ts_pairs
+
+            plan2mevs[plan_index][edit_index] = (st_attn_pairs, ts_attn_pairs)
 
     assert len(plans) == len(plan2paraphrase)
 
-    return plan2paraphrase, plan2attn_weight, plan2pq
+    return plan2paraphrase, plan2attn_weight, plan2pq, plan2mevs
 
 
 def save_outputs(outputs, output_path):
-    paras, attn_weights, pqs = outputs
+    paras, attn_weights, pqs, mevs = outputs
 
     paraphrase_gen.save_attn_weights(attn_weights, '%s.attn_weights' % output_path)
+    paraphrase_gen.save_attn_weights(mevs, '%s.mevs')
 
     para_flatten = paraphrase_gen.flatten(paras)
     save_tsv(output_path, para_flatten)
