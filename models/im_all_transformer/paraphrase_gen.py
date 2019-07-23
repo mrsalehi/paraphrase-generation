@@ -233,15 +233,18 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
 
             heads = range(num_heads) if save_all_heads else [mev_head]
 
-            st_attn_pairs = -1 * np.ones(shape=[len(src) * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
-            ts_attn_pairs = -1 * np.ones(shape=[len(tgt) * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
+            query_len = (len(src) + 1) if mev_add_cls_tok else len(src)
+            st_attn_pairs = -1 * np.ones(shape=[query_len * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
+
+            query_len = (len(tgt) + 1) if mev_add_cls_tok else len(tgt)
+            ts_attn_pairs = -1 * np.ones(shape=[query_len * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
 
             for i, h in enumerate(heads):
-                query_len = len(src) + 1 if mev_add_cls_tok else len(src)
+                query_len = (len(src) + 1) if mev_add_cls_tok else len(src)
                 st_pairs = get_attn_pairs(st_attn_map, mev_layer, h, query_len, len(tgt))
                 st_attn_pairs[i * query_len:(i + 1) * query_len] = st_pairs
 
-                query_len = len(tgt) + 1 if mev_add_cls_tok else len(tgt)
+                query_len = (len(tgt) + 1) if mev_add_cls_tok else len(tgt)
                 ts_pairs = get_attn_pairs(ts_attn_map, mev_layer, h, query_len, len(src))
                 ts_attn_pairs[i * query_len:(i + 1) * query_len] = ts_pairs
 
