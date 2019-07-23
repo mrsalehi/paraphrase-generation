@@ -253,7 +253,7 @@ def save_outputs(outputs, output_path):
     paras, attn_weights, pqs, mevs = outputs
 
     paraphrase_gen.save_attn_weights(attn_weights, '%s.attn_weights' % output_path)
-    paraphrase_gen.save_attn_weights(mevs, '%s.mevs')
+    paraphrase_gen.save_attn_weights(mevs, '%s.mevs' % output_path)
 
     para_flatten = paraphrase_gen.flatten(paras)
     save_tsv(output_path, para_flatten)
