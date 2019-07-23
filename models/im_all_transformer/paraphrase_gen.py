@@ -128,10 +128,7 @@ def get_t2t_subword_decode_fn(config):
     return decode
 
 
-def get_attn_pairs(attn_map, layer, head, query_len, key_len, add_cls_tok):
-    if add_cls_tok:
-        query_len += 1
-
+def get_attn_pairs(attn_map, layer, head, query_len, key_len):
     p2q_attn = attn_map[layer][head][:query_len, :key_len]
 
     attn_tgts = np.argmax(p2q_attn, axis=1)
@@ -240,11 +237,13 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
             ts_attn_pairs = -1 * np.ones(shape=[len(tgt) * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
 
             for i, h in enumerate(heads):
-                st_pairs = get_attn_pairs(st_attn_map, mev_layer, h, len(src), len(tgt), mev_add_cls_tok)
-                st_attn_pairs[i * len(src):(i + 1) * len(src)] = st_pairs
+                query_len = len(src) + 1 if mev_add_cls_tok else len(src)
+                st_pairs = get_attn_pairs(st_attn_map, mev_layer, h, query_len, len(tgt))
+                st_attn_pairs[i * query_len:(i + 1) * query_len] = st_pairs
 
-                ts_pairs = get_attn_pairs(ts_attn_map, mev_layer, h, len(tgt), len(src), mev_add_cls_tok)
-                ts_attn_pairs[i * len(tgt):(i + 1) * len(tgt)] = ts_pairs
+                query_len = len(tgt) + 1 if mev_add_cls_tok else len(tgt)
+                ts_pairs = get_attn_pairs(ts_attn_map, mev_layer, h, query_len, len(src))
+                ts_attn_pairs[i * query_len:(i + 1) * query_len] = ts_pairs
 
             plan2mevs[plan_index][edit_index] = (st_attn_pairs, ts_attn_pairs)
 
