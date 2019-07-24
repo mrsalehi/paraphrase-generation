@@ -128,16 +128,40 @@ def get_t2t_subword_decode_fn(config):
     return decode
 
 
-def get_attn_pairs(attn_map, layer, head, query_len, key_len):
+def get_attn_pairs(attn_map, layer, head, query_len, key_len, add_second_target=False):
     p2q_attn = attn_map[layer][head][:query_len, :key_len]
 
-    attn_tgts = np.argmax(p2q_attn, axis=1)
+    # attn_tgts = np.argmax(p2q_attn, axis=1)
+    # attn_srcs = np.arange(query_len)
+    #
+    # pairs = np.concatenate([
+    #     attn_srcs.reshape((-1, 1)),
+    #     attn_tgts.reshape((-1, 1))
+    # ], axis=1)
+
+    attn_tgts = p2q_attn.argsort(axis=1)[:, -2:][:, ::-1]
     attn_srcs = np.arange(query_len)
 
+    first_targets = attn_tgts[:, 0]
     pairs = np.concatenate([
         attn_srcs.reshape((-1, 1)),
-        attn_tgts.reshape((-1, 1))
+        first_targets.reshape((-1, 1))
     ], axis=1)
+
+    if add_second_target:
+        probs = p2q_attn[attn_srcs.reshape((-1, 1)), attn_tgts]
+        probs = util.softmax(probs, axis=1)
+
+        valid_second_targets = probs[:, 1] > 0.43
+        second_srcs = attn_srcs[valid_second_targets]
+        second_tgts = attn_tgts[valid_second_targets, 1]
+
+        pairs_from_second_targets = np.concatenate([
+            second_srcs.reshape((-1, 1)),
+            second_tgts.reshape((-1, 1))
+        ], axis=1)
+
+        pairs = np.concatenate([pairs, pairs_from_second_targets], axis=0)
 
     return pairs
 
@@ -197,6 +221,7 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
     mev_layer = config.get('eval.save_mev_layer', 0)
     mev_head = config.get('eval.save_mev_head', None)
     mev_add_cls_tok = config.get('eval.save_mev_cls_tok', False)
+    mev_add_second_tgt = config.get('eval.save_mev_add_second_tgt', False)
 
     for i, o in enumerate(tqdm(output, total=len(formulas))):
         paraphrases = get_paraphrases(o)
@@ -233,22 +258,19 @@ def generate(estimator, plan_path, checkpoint_path, config, V):
 
             heads = range(num_heads) if save_all_heads else [mev_head]
 
-            query_len = (len(src) + 1) if mev_add_cls_tok else len(src)
-            st_attn_pairs = -1 * np.ones(shape=[query_len * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
-
-            query_len = (len(tgt) + 1) if mev_add_cls_tok else len(tgt)
-            ts_attn_pairs = -1 * np.ones(shape=[query_len * (num_heads if save_all_heads else 1), 2], dtype=np.uint8)
+            st_attn_pairs = np.ones(shape=[0, 2], dtype=np.uint8)
+            ts_attn_pairs = np.ones(shape=[0, 2], dtype=np.uint8)
 
             for i, h in enumerate(heads):
                 query_len = (len(src) + 1) if mev_add_cls_tok else len(src)
-                st_pairs = get_attn_pairs(st_attn_map, mev_layer, h, query_len, len(tgt))
-                st_attn_pairs[i * query_len:(i + 1) * query_len] = st_pairs
+                st_pairs = get_attn_pairs(st_attn_map, mev_layer, h, query_len, len(tgt), mev_add_second_tgt)
+                st_attn_pairs = np.concatenate([st_attn_pairs, st_pairs], axis=0)
 
                 query_len = (len(tgt) + 1) if mev_add_cls_tok else len(tgt)
-                ts_pairs = get_attn_pairs(ts_attn_map, mev_layer, h, query_len, len(src))
-                ts_attn_pairs[i * query_len:(i + 1) * query_len] = ts_pairs
+                ts_pairs = get_attn_pairs(ts_attn_map, mev_layer, h, query_len, len(src), mev_add_second_tgt)
+                ts_attn_pairs = np.concatenate([ts_attn_pairs, ts_pairs], axis=0)
 
-            plan2mevs[plan_index][edit_index] = (st_attn_pairs, ts_attn_pairs)
+            plan2mevs[plan_index][edit_index] = (st_attn_pairs.astype(np.uint8), ts_attn_pairs.astype(np.uint8))
 
     assert len(plans) == len(plan2paraphrase)
 
