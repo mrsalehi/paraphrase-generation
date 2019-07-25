@@ -41,12 +41,17 @@ def get_vocab_embedding_matrix(config, data_dir):
         else:
             output = vocab.read_subword_embeddings(config)
     else:
+        if config.editor.get('word_vocab_file_path', None):
+            vocab_path = str(config.local_data_dir / config.dataset.path / config.editor.word_vocab_file_path)
+        else:
+            vocab_path = None
+
         output = vocab.read_word_embeddings(
             data_dir / 'word_vectors' / config.editor.wvec_path,
             config.editor.word_dim,
             config.editor.vocab_size,
             random_initialization=(not config.editor.get('use_pretrained_embeddings', True)),
-            vocab_file=config.editor.get('word_vocab_file_path', None)
+            vocab_file=vocab_path
         )
 
     return output
