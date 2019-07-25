@@ -53,7 +53,8 @@ def read_word_embeddings(file_path, embed_dim,
                          vocab_size=None,
                          include_special_tokens=True,
                          special_tokens=None,
-                         random_initialization=False):
+                         random_initialization=False,
+                         vocab_file=None):
     if special_tokens is None:
         special_tokens = SPECIAL_TOKENS
 
@@ -64,6 +65,14 @@ def read_word_embeddings(file_path, embed_dim,
 
     if not isinstance(file_path, str):
         file_path = str(file_path)
+
+    if vocab_file is not None:
+        with open(vocab_file, encoding='utf8') as f:
+            custom_vocab = list(map(lambda l: l.strip(), f))
+            vocab += custom_vocab
+
+        return vocab, np.random.normal(0, embed_dim ** -0.5, (vocab_size, embed_dim))
+
 
     with open(file_path, encoding='utf8') as f:
         for i, line in enumerate(f):

@@ -45,7 +45,8 @@ def get_vocab_embedding_matrix(config, data_dir):
             data_dir / 'word_vectors' / config.editor.wvec_path,
             config.editor.word_dim,
             config.editor.vocab_size,
-            random_initialization=(not config.editor.get('use_pretrained_embeddings', True))
+            random_initialization=(not config.editor.get('use_pretrained_embeddings', True)),
+            vocab_file=config.editor.get('word_vocab_file_path', None)
         )
 
     return output
