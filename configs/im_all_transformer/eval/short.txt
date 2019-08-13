@@ -10,5 +10,10 @@ eval {
     debug {
         cli = False
     }
-    save_attentions = True
+    save_attentions = False
+    save_mev = True
+    save_mev_layer = 0
+    save_mev_head = 0
+    save_mev_cls_tok = True
+    save_mev_add_second_tgt = True
 }
