@@ -83,7 +83,7 @@ def read_word_embeddings(file_path, embed_dim,
             tokens = line.split(' ')
 
             word, embed = tokens[0], np.array([float(t) for t in tokens[1:]])
-            assert len(embed) == embed_dim
+            # assert len(embed) == embed_dim
 
             vocab.append(word)
             embeds.append(embed)
