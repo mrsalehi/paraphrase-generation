@@ -36,6 +36,68 @@ def prepare_decoder_output(target_words, lengths, stop_token_id, pad_token_id):
 
     return outputs
 
+class AttentionAugmentRNNCellFixed(tf_rnn.MultiRNNCell):
+    def set_source_attn_index(self, index):
+        self.source_attn_index = index
+
+    def set_agenda(self, agenda):
+        self.agenda = agenda
+
+    def call(self, inputs, state):
+        cur_state_pos = 0
+        x = inputs
+        new_states = []
+
+        attn_cell = self._cells[0]
+        with tf.variable_scope("cell_%d" % 0):
+            if self._state_is_tuple:
+                if not nest.is_sequence(state):
+                    raise ValueError(
+                        "Expected state to be a tuple of length %d, but received: %s" %
+                        (len(self.state_size), state))
+                cur_state = state[0]
+            else:
+                cur_state = tf.slice(state, [0, cur_state_pos], [-1, attn_cell.state_size])
+                cur_state_pos += attn_cell.state_size
+
+            if not isinstance(cur_state, seq2seq.AttentionWrapperState):
+                raise ValueError("First state should be instance of AttentionWrapperState")
+
+            attention = cur_state.attention
+            rnn_input = tf.concat([x, self.agenda], axis=-1)
+            h, new_state = attn_cell(rnn_input, cur_state)
+            new_states.append(new_state)
+            new_attention = new_state.attention
+
+            # no skip connection on
+            x = h
+
+        for i, cell in enumerate(self._cells[1:]):
+            i = i + 1
+            with tf.variable_scope("cell_%d" % (i)):
+                if self._state_is_tuple:
+                    if not nest.is_sequence(state):
+                        raise ValueError(
+                            "Expected state to be a tuple of length %d, but received: %s" %
+                            (len(self.state_size), state))
+                    cur_state = state[i]
+                else:
+                    cur_state = tf.slice(state, [0, cur_state_pos], [-1, cell.state_size])
+                    cur_state_pos += cell.state_size
+
+                rnn_input = tf.concat([x, self.agenda, attention], axis=-1)
+                h, new_state = cell(rnn_input, cur_state)
+                new_states.append(new_state)
+
+                # add residual connection from cell input to cell output
+                x = x + h
+
+        output = tf.concat([x, new_attention], axis=1)
+        output = (output, x)
+        new_states = (tuple(new_states) if self._state_is_tuple else tf.concat(new_states, 1))
+
+        return output, new_states
+
 
 class AttentionAugmentRNNCell(tf_rnn.MultiRNNCell):
     def set_agenda(self, agenda):
@@ -131,7 +193,7 @@ def create_decoder_cell(agenda, base_sent_embeds, insert_word_embeds, delete_wor
 
         all_cells.append(cell)
 
-    decoder_cell = AttentionAugmentRNNCell(all_cells)
+    decoder_cell = AttentionAugmentRNNCellFixed(all_cells)
     decoder_cell.set_agenda(agenda)
 
     return decoder_cell
