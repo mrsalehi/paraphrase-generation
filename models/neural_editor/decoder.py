@@ -193,7 +193,7 @@ def create_decoder_cell(agenda, base_sent_embeds, insert_word_embeds, delete_wor
 
         all_cells.append(cell)
 
-    decoder_cell = AttentionAugmentRNNCellFixed(all_cells)
+    decoder_cell = AttentionAugmentRNNCell(all_cells)
     decoder_cell.set_agenda(agenda)
 
     return decoder_cell
