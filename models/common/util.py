@@ -1,4 +1,5 @@
 import subprocess
+from collections import deque
 
 import numpy as np
 
@@ -42,6 +43,15 @@ def get_free_words_set():
         free = set([l.strip() for l in f])
 
     return free
+
+
+def load_str_list(filepath):
+    lst = deque()
+    with open(filepath, encoding='utf8') as f:
+        for l in f:
+            lst.append(l[:-1])
+
+    return lst
 
 
 def softmax(X, theta=1.0, axis=None):
