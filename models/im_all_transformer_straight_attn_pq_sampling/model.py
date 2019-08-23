@@ -19,7 +19,7 @@ def model_fn(features, mode, config, embedding_matrix, vocab_tables):
         base_words, _, src_words, tgt_words, inserted_words, common_words = features
         output_words = tgt_words
         batch_size = tf.shape(base_words)[0]
-        loss_weighs = tf.ones(shape=[batch_size], dtype=tf.float32)
+        loss_weighs = tf.ones(shape=[batch_size,1], dtype=tf.float32)
     else:
         inputs_, loss_weighs = features
         base_words, output_words, src_words, tgt_words, inserted_words, common_words = inputs_

@@ -16,7 +16,7 @@ editor {
     encoder_layers = 3
     decoder_layers = 3
     beam_width = 5
-    no_insert_delete_attn = False
+    no_insert_delete_attn = True
     dropout_keep = 0.8
     ident_pr = 0.1
     attend_pr = 0.0
